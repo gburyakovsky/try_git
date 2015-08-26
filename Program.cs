@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Data.Sql;
+using System.Diagnostics.Eventing.Reader;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -127,6 +128,7 @@ namespace BlueDolphin.Renewal
 
         private static string renewal_skus_type_order_period = string.Empty;
 
+        private static bool update_orders_fulfillment_status_id;
         private static int skus_status;
         private static int skus_type_order;
         private static int products_id;
@@ -135,13 +137,16 @@ namespace BlueDolphin.Renewal
         private static int renewal_order_status;
         private static int customers_id;
         private static int orders_id;
+        private static int prior_orders_id;
+        private static int prior_order_status;
+        private static int prior_order_auto_renew;
 
         private static List<string> all_countries_array = new List<string>();
         /// <summary>
         /// 
         /// </summary>
         
-        DatabaseTables dt = new DatabaseTables();
+        //DatabaseTables dt = new DatabaseTables();
         
         public static string connectionString = ConfigurationManager.ConnectionStrings["databaseConnectionString"].ToString();
         public static MySqlConnection myConn = new MySqlConnection(connectionString);
@@ -490,7 +495,7 @@ namespace BlueDolphin.Renewal
 		            orders_id = Convert.ToInt32(myReader["orders_id"]);
 		            products_id = Convert.ToInt32(myReader["products_id"]);
 		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		            int prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+		            prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
 		            renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
 		            skus_status = Convert.ToInt32(myReader["skus_status"]);
 		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
@@ -656,12 +661,12 @@ namespace BlueDolphin.Renewal
                 {
                    string renewals_invoices_id = myReader["renewals_invoices_id"].ToString();
 		           customers_id = Convert.ToInt32(myReader["customers_id"]);
-		           orders_id = Convert.ToInt32(myReader["orders_id"]));
+		           orders_id = Convert.ToInt32(myReader["orders_id"]);
 		           string renewals_billing_series_id = myReader["renewals_billing_series_id"].ToString();
 		           int renewals_billing_series_effort_number = Convert.ToInt32(myReader["effort_number"]);
 		           string  products_id = myReader["products_id"].ToString();
 		           string skus_type_order =myReader["skus_type_order"].ToString();
-		           string prior_orders_id = myReader["prior_orders_id"].ToString();
+		           prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
 		           renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
 		           skus_status = Convert.ToInt32(myReader["skus_status"]);
 		           string date_sent = myReader["date_sent"].ToString();
@@ -1105,21 +1110,46 @@ namespace BlueDolphin.Renewal
 
                 }
 
-    //make sure this renewal order product's continuous service is still active and this renewal orders
-	//auto renew hasn't been changed.
-	if (continuous_service != 1) {
+                //make sure this renewal order product's continuous service is still active and this renewal orders
+	            //auto renew hasn't been changed.
+	            if (continuous_service != 1) {
 
-		check_renewal_order_result = "Continuous Service for products_id " + products_id.ToString() + " is not 1.";
-	}
+		            check_renewal_order_result = "Continuous Service for products_id " + products_id.ToString() + " is not 1.";
+	            }
 
-	if (renewal_order_auto_renew != 1) {
-		check_renewal_order_result = "Auto Renew for this order is not 1.";
-	}
-	if (renewal_order_status != 1) {
-		check_renewal_order_result = "This orders status is " + renewal_order_status.ToString() + ". Only Pending orders are valid.";
-	}
+	            if (renewal_order_auto_renew != 1) {
+		            check_renewal_order_result = "Auto Renew for this order is not 1.";
+	            }
+	            if (renewal_order_status != 1) {
+		            check_renewal_order_result = "This orders status is " + renewal_order_status.ToString() + ". Only Pending orders are valid.";
+	            }
 
 
+                // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
+	            if (prior_orders_id.ToString() != "") {
+		        
+                     MySqlCommand command = new MySqlCommand("select * from orders where orders_id = " + prior_orders_id.ToString(), myConn);
+                     command.ExecuteNonQuery();
+                     MySqlDataReader myReader;
+                     myReader = command.ExecuteReader();
+
+	                    while (myReader.Read())
+	                    {
+	                    
+                         prior_order_status =  Convert.ToInt32(myReader["orders_status"]);
+                         prior_order_auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+
+	                    }
+
+		            //if the original order isn't a Paid order (cancelled or disputed) go on to the next order.
+		            //if the original order's auto-renew (user action) was changed move on the next order.
+		            if (prior_order_status != 2) {
+			            check_renewal_order_result = "The original order (orders_id: " + prior_orders_id.ToString() + ") is no longer Paid.";
+		            }
+		            if (prior_order_auto_renew == 0) {
+			            check_renewal_order_result = "The auto renew for the original order (orders_id: " + prior_orders_id.ToString() + ") is not 1.";
+		            }
+	            }
 
                 return check_renewal_order_result;
             }
@@ -1223,6 +1253,28 @@ namespace BlueDolphin.Renewal
             {
                 Console.WriteLine(e.Message);
 
+
+            }
+        }
+
+        private static void create_fulfillment_batch_item(int orders_id, int fulfillment_status_id, string orders_previous_status = "" )
+        {
+            try
+            {
+
+                if (orders_id == null || fulfillment_status_id == null)
+                {
+                    return;
+                }
+
+                update_orders_fulfillment_status_id = true;
+
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                
 
             }
         }
