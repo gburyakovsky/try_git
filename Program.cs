@@ -161,7 +161,13 @@ namespace BlueDolphin.Renewal
         private static int renewal_orders_customers_id;
         private static int products_status;
         private static int skus_id;
-
+        private static int skinsites_id;
+        private static int skus_term;
+        private static int effort_number;
+        private static DateTime date_purchased;
+        private static double amount_owed;
+        private static double amount_paid;
+        private static double price;
 
 
         private static string billing_first_name;
@@ -179,9 +185,14 @@ namespace BlueDolphin.Renewal
         private static string cc_number;
         private static string cc_number_display;
         private static string cc_expires;
-        private static string renewals_billing_series_cod;
+        private static string renewals_billing_series_code;
         private static bool accepted_for_delivery;
         private static string renewals_invoices_email_name;
+        private static string products_name;
+        private static string email_address;
+        private static string billing_address;
+        private static string billing_postcode;
+        private static string template_directory;
 
         private static List<string> all_countries_array = new List<string>();
         /// <summary>
@@ -192,6 +203,9 @@ namespace BlueDolphin.Renewal
         
         public static string connectionString = ConfigurationManager.ConnectionStrings["databaseConnectionString"].ToString();
         public static MySqlConnection myConn = new MySqlConnection(connectionString);
+        private static MySqlCommand command;
+        private static MySqlCommand command2;
+        private static MySqlCommand command3;
 
         static void Main(string[] args)
         {
@@ -334,7 +348,7 @@ namespace BlueDolphin.Renewal
 			AND to_days(o.renewal_date) <= to_days(curdate())
 	";
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = create_renewal_orders_query_string;
                 command.ExecuteNonQuery();
 
@@ -394,7 +408,7 @@ namespace BlueDolphin.Renewal
 				s.skus_type_order_period desc
 		";
 
-                    MySqlCommand command2 = new MySqlCommand(potential_renewal_skus_query_string, myConn);
+                    command2 = new MySqlCommand(potential_renewal_skus_query_string, myConn);
                     command2.ExecuteNonQuery();
 
              /*       if (DEBUG == 'true') print "number of renewal skus for product : " .  $original_order_products_id . ": " . tep_db_num_rows($potential_renewal_skus_query). "\n";
@@ -511,7 +525,7 @@ namespace BlueDolphin.Renewal
 			            and pd.products_id = op.products_id
 	            ";
 
-                MySqlCommand command = new MySqlCommand(charge_renewal_orders_query_string, myConn);
+                command = new MySqlCommand(charge_renewal_orders_query_string, myConn);
   
                 command.ExecuteNonQuery();
 
@@ -536,13 +550,13 @@ namespace BlueDolphin.Renewal
 		            final_price = Convert.ToDouble(myReader["final_price"]);
 		            cc_number = myReader["cc_number"].ToString();
 		            cc_expires = myReader["cc_expires"].ToString();
-		            string email_address = myReader["customers_email_address"].ToString();
-		            string billing_first_name = myReader["billing_first_name"].ToString();
-		            string billing_last_name = myReader["billing_last_name"].ToString();
-		            string billing_address =  myReader["billing_street_address"].ToString();
-		            string billing_city = myReader["billing_city"].ToString();
-		            string billing_state = myReader["billing_state"].ToString();
-		            string billing_postcode = myReader["billing_postcode"].ToString();
+		            email_address = myReader["customers_email_address"].ToString();
+		            billing_first_name = myReader["billing_first_name"].ToString();
+		            billing_last_name = myReader["billing_last_name"].ToString();
+		            billing_address =  myReader["billing_street_address"].ToString();
+		            billing_city = myReader["billing_city"].ToString();
+		            billing_state = myReader["billing_state"].ToString();
+		            billing_postcode = myReader["billing_postcode"].ToString();
 		            string billing_country =  myReader["billing_country"].ToString();
 		            int renewals_credit_card_charge_attempts = Convert.ToInt32(myReader["renewals_credit_card_charge_attempts"]) + 1;
 		            int renewals_expiration_date_failures = Convert.ToInt32(myReader["renewals_expiration_date_failures"]);
@@ -657,7 +671,7 @@ namespace BlueDolphin.Renewal
                 //renwal_invoices_created will be 1.
                 //we will then check before sending it if the order is still valid.
 
-                MySqlCommand command = new MySqlCommand(renewal_orders_query_string, myConn);
+                command = new MySqlCommand(renewal_orders_query_string, myConn);
                 command.ExecuteNonQuery();
 
                 MySqlDataReader myReader;
@@ -723,7 +737,7 @@ namespace BlueDolphin.Renewal
 		                //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
                 //	}
 
-                            MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                            command = new MySqlCommand(string.Empty, myConn);
                             command.CommandText = @"
 		            select *
 		            from renewals_invoices ri,
@@ -842,7 +856,7 @@ namespace BlueDolphin.Renewal
 
                 int number_of_email_renewal_invoices_sent = 0;
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = @"select *
 												from renewals_invoices ri,
 													 orders o,
@@ -882,13 +896,13 @@ namespace BlueDolphin.Renewal
 		            products_id = Convert.ToInt32(myReader["products_id"]);
 		            skus_id = Convert.ToInt32(myReader["skus_id"]);
 		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		            string prior_orders_id = myReader["prior_orders_id"].ToString();
+		            prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
 		            renewal_order_status =Convert.ToInt32(myReader["orders_status"]);
 		            skus_status = Convert.ToInt32(myReader["skus_status"]);
 		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
 		            auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 		            string is_gift = myReader["is_gift"].ToString();
-		            string skinsites_id = myReader["skinsites_id"].ToString();
+		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
 		            string is_postcard_confirmation = myReader["is_postcard_confirmation"].ToString();
                 }
 
@@ -934,7 +948,7 @@ namespace BlueDolphin.Renewal
                 // Set our number of processed paper invoices to its default value of zero.
 	            int number_of_renewal_paper_invoices_file_records = 0;
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = renewal_invoices_info_query_string;
                 command.ExecuteNonQuery();
 
@@ -964,19 +978,19 @@ namespace BlueDolphin.Renewal
 		prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
 		renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
 		skus_status = Convert.ToInt32(myReader["skus_status"]);
-		products_name = myReader["products_name"];
-		skus_term = myReader["skus_term"];
-		effort_number = myReader["effort_number"];
-		date_purchased = myReader["date_purchased"];
-		amount_owed = myReader["amount_owed"];
-		amount_paid = myReader["amount_paid"];
-		price = myReader["products_price"];
-		email_address = myReader["customers_email_address"];
+		products_name = myReader["products_name"].ToString();
+		skus_term = Convert.ToInt32(myReader["skus_term"]);
+		effort_number = Convert.ToInt32(myReader["effort_number"]);
+		date_purchased = Convert.ToDateTime(myReader["date_purchased"]);
+		amount_owed = Convert.ToDouble(myReader["amount_owed"]);
+		amount_paid = Convert.ToDouble(myReader["amount_paid"]);
+		price = Convert.ToDouble(myReader["products_price"]);
+		email_address = myReader["customers_email_address"].ToString();
 		continuous_service = Convert.ToInt32(myReader["continuous_service"]);
 		auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 		cc_number_display = myReader["cc_number_display"].ToString();
-		template_directory = myReader["tplDir"];
-		skinsites_id = myReader["skinsites_id"];
+		template_directory = myReader["tplDir"].ToString();
+		skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
 
 	/*	// Check to make sure we can still process this paper invoice.
 		// If not print why and stop processing renewal invoice.
@@ -1036,7 +1050,7 @@ namespace BlueDolphin.Renewal
                 int renewals_invoices_id;
 
                 //LOOP THROUHG ALL INVOICES WHERE IN_PROGRESS IS 0.
-                MySqlCommand command = new MySqlCommand(string.Empty,myConn);
+                command = new MySqlCommand(string.Empty,myConn);
                 command.CommandText = "select * from renewals_invoices ri where ri.in_progress=0";
                 command.ExecuteNonQuery();
 
@@ -1051,10 +1065,10 @@ namespace BlueDolphin.Renewal
                      //move the invoice to history.
 		             //we use replace. If the server goes down right between these 2 stmts then the next time
 		             //it will still work.
-		             MySqlCommand command2 = new MySqlCommand("replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = " + renewals_invoices_id.ToString(), myConn);
+		             command2 = new MySqlCommand("replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = " + renewals_invoices_id.ToString(), myConn);
                      command2.ExecuteNonQuery();
                      //remove old one
-                     MySqlCommand command3 = new MySqlCommand("delete from renewals_invoices where renewals_invoices_id = " + renewals_invoices_id.ToString(), myConn);
+                     command3 = new MySqlCommand("delete from renewals_invoices where renewals_invoices_id = " + renewals_invoices_id.ToString(), myConn);
                      command3.ExecuteNonQuery();
                     
                     number_of_renewal_invoices_cleaned_up++;
@@ -1084,7 +1098,7 @@ namespace BlueDolphin.Renewal
             {
                 int number_of_mass_cancelled_orders = 0;
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = @"select ri.*, o.*, rbs.*
 												from renewals_invoices ri,
 													 orders o,
@@ -1113,13 +1127,13 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-                if (orders_id == null)
+                if (orders_id.ToString() == string.Empty)
                 {
                     
 
                 }
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = @"select
 			            s.renewal_lead_time as skus_renewal_lead_time,
 			            s.skus_days_spanned,
@@ -1179,7 +1193,7 @@ namespace BlueDolphin.Renewal
                                                      " and skus_type = 'RENEW' and skus_type_order = " +
                                                      skus_type_order.ToString() + " and skus_status = '1'";
 
-                    MySqlCommand command = new MySqlCommand(skus_status_check_query, myConn);
+                    command = new MySqlCommand(skus_status_check_query, myConn);
                     command.ExecuteNonQuery();
 
                     MySqlDataReader myReader;
@@ -1216,7 +1230,7 @@ namespace BlueDolphin.Renewal
                 // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
 	            if (prior_orders_id.ToString() != "") {
 		        
-                     MySqlCommand command = new MySqlCommand("select * from orders where orders_id = " + prior_orders_id.ToString(), myConn);
+                     command = new MySqlCommand("select * from orders where orders_id = " + prior_orders_id.ToString(), myConn);
                      command.ExecuteNonQuery();
                      MySqlDataReader myReader;
                      myReader = command.ExecuteReader();
@@ -1278,7 +1292,7 @@ namespace BlueDolphin.Renewal
 	while ($countries_array = tep_db_fetch_array($countries_query)) {
 		$all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];*/
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "select * from countries";
                 command.ExecuteNonQuery();
 
@@ -1309,7 +1323,7 @@ namespace BlueDolphin.Renewal
             try
             {
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action +", " + orders_id.ToString()+")";
                 command.ExecuteNonQuery();
 
@@ -1329,7 +1343,7 @@ namespace BlueDolphin.Renewal
             try
             {
 
-                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " + string.Empty+")";
                 command.ExecuteNonQuery();
 
