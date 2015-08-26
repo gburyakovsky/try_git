@@ -133,6 +133,10 @@ namespace BlueDolphin.Renewal
         private static int continuous_service;
         private static int renewal_order_auto_renew;
         private static int renewal_order_status;
+        private static int customers_id;
+        private static int orders_id;
+
+        private static List<string> all_countries_array = new List<string>();
         /// <summary>
         /// 
         /// </summary>
@@ -155,54 +159,74 @@ namespace BlueDolphin.Renewal
 
                 myConn.Open();
 
+                set_all_defines();
+
                 //set up logging of script to file
 
                 Console.WriteLine("Begin renewal main"+"\n");
+                //log_renewal_process("Begin renewal main");
                 email_body += "Begin renewal main \n\n";
 
                 Console.WriteLine("Begin init_renewal_orders");
+                //log_renewal_process("Begin init_renewal_orders");
                 number_of_renewal_orders_created = init_renewal_orders();
                 Console.WriteLine("End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString() + "\n");
+                //log_renewal_process("End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString());
                 email_body += "End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString()+"\n\n";
 
                 //let"s charge first since if it fails we can create the 1015 right after this.
 	            Console.WriteLine("Begin charging renewal orders");
+                //log_renewal_process("Begin charging renewal orders");
 	            number_of_renewal_orders_charged = charge_renewal_orders();
                 Console.WriteLine("End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString() + "\n");
-	            email_body += "End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString()+ "\n\n";
+                //log_renewal_process("End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString());
+                email_body += "End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString()+ "\n\n";
                 
                 Console.WriteLine("Begin creating renewal invoices");
+                //log_renewal_process("Begin creating renewal invoices");
 	            number_of_renewal_invoices_created = create_first_effort_renewal_invoices();
                 Console.WriteLine("End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString() + "\n");
-	            email_body += "End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString() +"\n\n";
+                //log_renewal_process("End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString());
+                email_body += "End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString() +"\n\n";
 
                 Console.WriteLine("Begin creating additional renewal invoices");
+                //log_renewal_process("Begin creating additional renewal invoices");
                 number_of_additional_renewal_invoices_created = create_additional_renewal_invoices();
                 Console.WriteLine("End creating additional renewal invoices. number of additional renewal invoices created: " + number_of_additional_renewal_invoices_created.ToString() + "\n");
+                //log_renewal_process("End creating additional renewal invoices. number of additional renewal invoices created: " + number_of_additional_renewal_invoices_created.ToString());
                 email_body += "End creating additional renewal invoices. number of additional renewal invoices created: " + number_of_additional_renewal_invoices_created.ToString() + "\n\n";
 
                 Console.WriteLine("Begin sending renewal email invoices");
+                //log_renewal_process("Begin sending renewal email invoices");
                 number_of_renewal_email_invoices_sent = send_renewal_email_invoices();
                 Console.WriteLine("End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString() + "\n");
+                //log_renewal_process("End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString());
                 email_body += "End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString() + "\n\n";
 
                 Console.WriteLine("Begin creating renewal paper invoices file");
+                //log_renewal_process("Begin creating renewal paper invoices file");
                 number_of_renewal_paper_invoices_file_records = create_renewal_paper_invoices_file();
                 Console.WriteLine("End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString() + "\n");
+                //log_renewal_process("End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString());
                 email_body += "End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString() + "\n\n";
               
                 Console.WriteLine("Begin cleaning up renewal invoices");
+                //log_renewal_process("Begin cleaning up renewal invoices");
                 number_of_invoices_cleaned_up = clean_up_renewal_invoices();
                 Console.WriteLine("End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString() + "\n");
+                //log_renewal_process("End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString());
                 email_body += "End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString() + "\n\n";
 
                 //now see if we need to cancel any renewal orders.
                 Console.WriteLine("Begin mass cancelling renewal orders");
+                //log_renewal_process("Begin mass cancelling renewal orders");
                 number_of_renewal_orders_mass_cancelled = mass_cancel_renewal_orders();
                 Console.WriteLine("End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString() + "\n");
+                //log_renewal_process("End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString());
                 email_body += "End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString() + "\n\n";
 
                 Console.WriteLine("End renewal main");
+                log_renewal_process("End renewal main");
 	            email_body += "End renewal main \n\n";
 
                 // Send e-mail saying we have completed the renewal run.
@@ -462,8 +486,8 @@ namespace BlueDolphin.Renewal
                 while (myReader.Read())
                 {
        
-                    int customers_id = Convert.ToInt32(myReader["customers_id"]);
-		            int orders_id = Convert.ToInt32(myReader["orders_id"]);
+                    customers_id = Convert.ToInt32(myReader["customers_id"]);
+		            orders_id = Convert.ToInt32(myReader["orders_id"]);
 		            products_id = Convert.ToInt32(myReader["products_id"]);
 		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
 		            int prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
@@ -631,8 +655,8 @@ namespace BlueDolphin.Renewal
                 while (myReader.Read())
                 {
                    string renewals_invoices_id = myReader["renewals_invoices_id"].ToString();
-		           string customers_id = myReader["customers_id"].ToString();
-		           string orders_id = myReader["orders_id"].ToString();
+		           customers_id = Convert.ToInt32(myReader["customers_id"]);
+		           orders_id = Convert.ToInt32(myReader["orders_id"]));
 		           string renewals_billing_series_id = myReader["renewals_billing_series_id"].ToString();
 		           int renewals_billing_series_effort_number = Convert.ToInt32(myReader["effort_number"]);
 		           string  products_id = myReader["products_id"].ToString();
@@ -758,8 +782,8 @@ namespace BlueDolphin.Renewal
                 {
                     string renewals_invoices_id = myReader["renewals_invoices_id"].ToString();
 		            renewals_invoices_email_name = myReader["renewals_invoices_email_name"].ToString();
-		            string customers_id = myReader["customers_id"].ToString();
-		            string orders_id = myReader["orders_id"].ToString();
+		            customers_id = Convert.ToInt32(myReader["customers_id"]);
+		            orders_id = Convert.ToInt32(myReader["orders_id"]);
 		            string renewals_billing_series_id = myReader["renewals_billing_series_id"].ToString();
 		            bool accepted_for_delivery = false;
 		            string products_id = myReader["products_id"].ToString();
@@ -992,11 +1016,11 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static DateTime get_renewal_date(string orders_id)
+        private static DateTime get_renewal_date(int orders_id)
         {
             try
             {
-                if (orders_id == "")
+                if (orders_id == null)
                 {
                     
 
@@ -1125,5 +1149,82 @@ namespace BlueDolphin.Renewal
             }
         }
 
+        private static void set_all_defines()
+        {
+
+            try
+            {
+
+                //countries table, for each country name give us the country code.
+	/*$countries_query = tep_db_query("select * from countries");
+
+	while ($countries_array = tep_db_fetch_array($countries_query)) {
+		$all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];*/
+
+                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command.CommandText = "select * from countries";
+                command.ExecuteNonQuery();
+
+                MySqlDataReader myReader;
+                myReader = command.ExecuteReader();
+
+                while (myReader.Read())
+                {
+                   
+                }
+
+                myReader.Close();
+	
+
+                
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                
+
+            }
+
+        }
+
+        private static void log_renewal_process(string action, int orders_id)
+        {
+
+            try
+            {
+
+                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command.CommandText = "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action +", " + orders_id.ToString()+")";
+                command.ExecuteNonQuery();
+
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+
+
+            }
+        }
+
+        private static void log_renewal_process(string action)
+        {
+
+            try
+            {
+
+                MySqlCommand command = new MySqlCommand(string.Empty, myConn);
+                command.CommandText = "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " + string.Empty+")";
+                command.ExecuteNonQuery();
+
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+
+
+            }
+        }
     }
 }
