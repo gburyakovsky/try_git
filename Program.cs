@@ -20,6 +20,9 @@ namespace BlueDolphin.Renewal
     class BlueDolphinRenewal
     {
 
+        //debug variable
+        public static bool Debug = true;
+
         // define the database table names used in the project
         public static string TABLE_ADDRESS_BOOK = "address_book";
         public static string TABLE_ADDRESS_FORMAT = "address_format";
@@ -168,7 +171,11 @@ namespace BlueDolphin.Renewal
         private static double amount_owed;
         private static double amount_paid;
         private static double price;
-
+        private static int is_gift;
+        private static int is_postcard_confirmation;
+        private static int renewals_credit_card_charge_attempts;
+        private static int renewals_expiration_date_failures;
+        private static int payment_cards_id;
 
         private static string billing_first_name;
         private static string billing_last_name;
@@ -193,6 +200,12 @@ namespace BlueDolphin.Renewal
         private static string billing_address;
         private static string billing_postcode;
         private static string template_directory;
+        private static string billing_country;
+        private static DateTime date_sent;
+        private static string override_renewal_billing_descriptor;
+        private static string products_billing_descriptor;
+        private static string cc_expires_year;
+        private static string cc_expires_month;
 
         private static List<string> all_countries_array = new List<string>();
         /// <summary>
@@ -206,6 +219,9 @@ namespace BlueDolphin.Renewal
         private static MySqlCommand command;
         private static MySqlCommand command2;
         private static MySqlCommand command3;
+        private static MySqlCommand command4;
+        private static MySqlCommand command5;
+        private static MySqlCommand command5;
 
         static void Main(string[] args)
         {
@@ -319,34 +335,34 @@ namespace BlueDolphin.Renewal
                 //select all orders that have a continuous_service, with no renewal invoices created,
                 // user want to renew (auto_renew), paid orders and renewal notice < today.
 
-                string create_renewal_orders_query_string = @"
-		SELECT
-			o.`renewal_payment_cards_id`,
-			pc.cc_type AS renewal_cc_type,
-			pc.cc_number AS renewal_cc_number,
-			pc.cc_number_display AS renewal_cc_number_display,
-			pc.cc_expires AS renewal_cc_expires,
-			pc.cc_owner AS renewal_cc_owner,
-			o.*, op.*, s.*,
-			p.continuous_service,
-			p.products_status
-		FROM
-			orders o LEFT JOIN payment_cards pc ON (pc.payment_cards_id = o.renewal_payment_cards_id),
-			orders_products op,
-			products p,
-			skus s
-		WHERE
-			o.orders_id = op.orders_id
-			AND op.products_id = p.products_id
-			AND op.skus_id = s.skus_id
-			AND p.continuous_service = 1
-			AND o.auto_renew = 1
-			AND o.renewal_error != 1
-			AND o.orders_status = 2
-			AND o.renewal_date is not null
-			AND to_days(o.renewal_date) > to_days(DATE_SUB(curdate(),INTERVAL 60 DAY))
-			AND to_days(o.renewal_date) <= to_days(curdate())
-	";
+                        string create_renewal_orders_query_string = @"
+		        SELECT
+			        o.`renewal_payment_cards_id`,
+			        pc.cc_type AS renewal_cc_type,
+			        pc.cc_number AS renewal_cc_number,
+			        pc.cc_number_display AS renewal_cc_number_display,
+			        pc.cc_expires AS renewal_cc_expires,
+			        pc.cc_owner AS renewal_cc_owner,
+			        o.*, op.*, s.*,
+			        p.continuous_service,
+			        p.products_status
+		        FROM
+			        orders o LEFT JOIN payment_cards pc ON (pc.payment_cards_id = o.renewal_payment_cards_id),
+			        orders_products op,
+			        products p,
+			        skus s
+		        WHERE
+			        o.orders_id = op.orders_id
+			        AND op.products_id = p.products_id
+			        AND op.skus_id = s.skus_id
+			        AND p.continuous_service = 1
+			        AND o.auto_renew = 1
+			        AND o.renewal_error != 1
+			        AND o.orders_status = 2
+			        AND o.renewal_date is not null
+			        AND to_days(o.renewal_date) > to_days(DATE_SUB(curdate(),INTERVAL 60 DAY))
+			        AND to_days(o.renewal_date) <= to_days(curdate())
+	        ";
 
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = create_renewal_orders_query_string;
@@ -381,6 +397,9 @@ namespace BlueDolphin.Renewal
 			            renewal_skus_type_order_period = (Convert.ToInt32(original_order_skus_type_order_period) + 1).ToString();
 		            }
 
+                    if (Debug) 
+                        Console.WriteLine( "order number: " +  original_order_id.ToString() + " renewal_skus_type_order_period: " +  renewal_skus_type_order_period + "\n");
+
                     //check to make sure that the renewal skus is available and if it is is active.
                     //if the sku isn"t available and the original sku was an INTRO sku no renewals are possible.
                     //if the original sku was a "RENEW" sku and it isn"t available go back to the original renewal sku
@@ -388,25 +407,25 @@ namespace BlueDolphin.Renewal
                     //we check for the s.skus_type_order = $original_order_skus_type_order since we might be renewing
                     //a 2 year pub we need to use the 2 year pub renewal skus for that.
 
-                    string potential_renewal_skus_query_string = @"
-			select
-				*,
-				if(p.first_issue_delay_days=0,pf.first_issue_delay_days, p.first_issue_delay_days) as first_issue_delay_days
-			from
-				skus s,
-				products 
-				publication_frequency pf
-			where
-				s.products_id = " + original_order_products_id.ToString() + @"
-				and s.skus_type = 'RENEW'
-				and s.skus_type_order = " + original_order_skus_type_order.ToString() + @"
-				and s.skus_status = 1
-				and s.fulfillment_flag = 1
-				and s.products_id = p.products_id
-				and p.publication_frequency_id = pf.publication_frequency_id
-			order by
-				s.skus_type_order_period desc
-		";
+                        string potential_renewal_skus_query_string = @"
+			    select
+				    *,
+				    if(p.first_issue_delay_days=0,pf.first_issue_delay_days, p.first_issue_delay_days) as first_issue_delay_days
+			    from
+				    skus s,
+				    products 
+				    publication_frequency pf
+			    where
+				    s.products_id = " + original_order_products_id.ToString() + @"
+				    and s.skus_type = 'RENEW'
+				    and s.skus_type_order = " + original_order_skus_type_order.ToString() + @"
+				    and s.skus_status = 1
+				    and s.fulfillment_flag = 1
+				    and s.products_id = p.products_id
+				    and p.publication_frequency_id = pf.publication_frequency_id
+			    order by
+				    s.skus_type_order_period desc
+		    ";
 
                     command2 = new MySqlCommand(potential_renewal_skus_query_string, myConn);
                     command2.ExecuteNonQuery();
@@ -446,12 +465,83 @@ namespace BlueDolphin.Renewal
 		}
 		// END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH */
 
-                // Potential Renewal SKUs found: now find the right one
+                    // Potential Renewal SKUs found: now find the right one
 		
-		        int previous_orders_skus_type_order_period = original_order_skus_type_order_period - 1;
+		            int previous_orders_skus_type_order_period = original_order_skus_type_order_period - 1;
 
-                MySqlDataReader myReader2;
-                myReader2 = command2.ExecuteReader();
+                    MySqlDataReader myReader2;
+                    myReader2 = command2.ExecuteReader();
+
+                    // START MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH (4/30/2012)
+                    if (!myReader2.HasRows)  // No renewal SKUs could be used for this order; record reason why and move on to next order.
+                    {
+                        // Were there no renewal SKUs at all?
+                        string ANY_potential_renewal_skus_query_string = "select * from skus where products_id = '" + original_order_products_id + "' and skus_type = 'RENEW'";
+                        command3 = new MySqlCommand(ANY_potential_renewal_skus_query_string, myConn);
+                        command3.ExecuteNonQuery();
+
+                        MySqlDataReader noSku;
+                        noSku = command3.ExecuteReader();
+
+                        if (!noSku.HasRows)
+                        {
+                            ANY_potential_renewal_skus_query_string = "update " + TABLE_ORDERS +
+                                                                      " set renewal_error='1', renewal_error_description='Error: no renewal SKU exists for the PRODUCT in this order.' where orders_id= " +
+                                                                      original_order_id.ToString();
+
+                            command4 = new MySqlCommand(ANY_potential_renewal_skus_query_string, myConn);
+                            command4.ExecuteNonQuery();
+                        }
+                        else // Of the potential renewal SKUs, were there none for this order's SKUS_TYPE_ORDER?
+                        {
+                           string potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string = "select * from skus where products_id = '" + original_order_products_id.ToString() + "' and skus_type = 'RENEW' and skus_type_order='" + original_order_skus_type_order.ToString()+"'";
+                           command4 = new MySqlCommand(potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string, myConn);
+                           command4.ExecuteNonQuery();
+
+                           MySqlDataReader yesSku;
+                           yesSku = command4.ExecuteReader();
+
+                            if (!yesSku.HasRows)
+                            {
+                                string NoYesSku = "update " + TABLE_ORDERS +
+                                                  " set renewal_error='1', renewal_error_description='Error: No renewal SKU(s) with the proper SKU TYPE ORDER (" +
+                                                  original_order_skus_type_order.ToString() +
+                                                  ") could be found for this order.' where orders_id=" +
+                                                  original_order_id.ToString();
+                                command5 = new MySqlCommand(NoYesSku, myConn);
+                                command5.ExecuteNonQuery();
+
+                            }
+                            else  // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
+                            {
+
+                                string potential_ACTIVE_renewal_skus_query_string = "select * from skus where products_id = '" + original_order_products_id.ToString() + "' and skus_type = 'RENEW' and skus_type_order='" + original_order_skus_type_order.ToString() + "' and skus_status='1'";
+                                command5 = new MySqlCommand(potential_ACTIVE_renewal_skus_query_string, myConn);
+                                command5.ExecuteNonQuery();
+
+                                 MySqlDataReader activeSku;
+                                 activeSku = command5.ExecuteReader();
+
+                                if(!activeSku.HasRows)
+                                {
+                                    
+                                }
+                                else
+                                {
+                                    
+
+                                }
+
+                                activeSku.Close();
+                            }
+
+                            yesSku.Close();
+
+                        }
+
+                        noSku.Close();
+
+                    }
 
                     while (myReader2.Read())
                     {
@@ -557,57 +647,57 @@ namespace BlueDolphin.Renewal
 		            billing_city = myReader["billing_city"].ToString();
 		            billing_state = myReader["billing_state"].ToString();
 		            billing_postcode = myReader["billing_postcode"].ToString();
-		            string billing_country =  myReader["billing_country"].ToString();
-		            int renewals_credit_card_charge_attempts = Convert.ToInt32(myReader["renewals_credit_card_charge_attempts"]) + 1;
-		            int renewals_expiration_date_failures = Convert.ToInt32(myReader["renewals_expiration_date_failures"]);
-		            int is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
-		            int payment_cards_id = Convert.ToInt32(myReader["payment_cards_id"]);
-		            int skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
-		            string override_renewal_billing_descriptor = myReader["override_renewal_billing_descriptor"].ToString();
-		            string products_billing_descriptor = myReader["products_billing_descriptor"].ToString();
+		            billing_country =  myReader["billing_country"].ToString();
+		            renewals_credit_card_charge_attempts = Convert.ToInt32(myReader["renewals_credit_card_charge_attempts"]) + 1;
+		            renewals_expiration_date_failures = Convert.ToInt32(myReader["renewals_expiration_date_failures"]);
+		            is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
+		            payment_cards_id = Convert.ToInt32(myReader["payment_cards_id"]);
+		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
+		            override_renewal_billing_descriptor = myReader["override_renewal_billing_descriptor"].ToString();
+		            products_billing_descriptor = myReader["products_billing_descriptor"].ToString();
 
                     // echo "Products Billing Descriptor Override: $override_renewal_billing_descriptor\n";
 
 		            //if the expiration date is expired, we should increase by 1 year.
-                    string cc_expires_year = cc_expires.Substring(2, 2);
-                    string cc_expires_month = cc_expires.Substring(0, 2);
+                    cc_expires_year = cc_expires.Substring(2, 2);
+                    cc_expires_month = cc_expires.Substring(0, 2);
 
                 }
 
-                myReader.Close();
+                     myReader.Close();
 
-               /* var transaction = new Dictionary<string, string>();
+                           /* var transaction = new Dictionary<string, string>();
 
-                transaction["USER"] = "";
-                transaction["VENDOR"] = "";
-                transaction["PARTNER"] = "";
-                transaction["PWD"] = "";
-                transaction["TRXTYPE"] = "";
-                transaction["USER"] = "";
-                transaction["VENDOR"] = "";
-                transaction["PARTNER"] = "";
-                transaction["PWD"] = "";
-                transaction["TRXTYPE"] = "";
-                transaction["USER"] = "";
-                transaction["VENDOR"] = "";
-                transaction["PARTNER"] = "";
-                transaction["PWD"] = "";
-                transaction["TRXTYPE"] = "";
-                transaction["USER"] = "";
-                transaction["VENDOR"] = "";
-                transaction["PARTNER"] = "";
-                transaction["PWD"] = "";
-                transaction["TRXTYPE"] = "";
-                transaction["USER"] = "";
-                transaction["VENDOR"] = "";
-                transaction["PARTNER"] = "";
-                transaction["PWD"] = "";
-                transaction["TRXTYPE"] = "";
-                transaction["USER"] = "";
-                transaction["VENDOR"] = "";
-                transaction["PARTNER"] = "";
-                transaction["PWD"] = "";
-                transaction["TRXTYPE"] = ""; */
+                            transaction["USER"] = "";
+                            transaction["VENDOR"] = "";
+                            transaction["PARTNER"] = "";
+                            transaction["PWD"] = "";
+                            transaction["TRXTYPE"] = "";
+                            transaction["USER"] = "";
+                            transaction["VENDOR"] = "";
+                            transaction["PARTNER"] = "";
+                            transaction["PWD"] = "";
+                            transaction["TRXTYPE"] = "";
+                            transaction["USER"] = "";
+                            transaction["VENDOR"] = "";
+                            transaction["PARTNER"] = "";
+                            transaction["PWD"] = "";
+                            transaction["TRXTYPE"] = "";
+                            transaction["USER"] = "";
+                            transaction["VENDOR"] = "";
+                            transaction["PARTNER"] = "";
+                            transaction["PWD"] = "";
+                            transaction["TRXTYPE"] = "";
+                            transaction["USER"] = "";
+                            transaction["VENDOR"] = "";
+                            transaction["PARTNER"] = "";
+                            transaction["PWD"] = "";
+                            transaction["TRXTYPE"] = "";
+                            transaction["USER"] = "";
+                            transaction["VENDOR"] = "";
+                            transaction["PARTNER"] = "";
+                            transaction["PWD"] = "";
+                            transaction["TRXTYPE"] = ""; */
 
                 return number_of_renewal_charged;
             }
@@ -772,7 +862,7 @@ namespace BlueDolphin.Renewal
 		           prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
 		           renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
 		           skus_status = Convert.ToInt32(myReader["skus_status"]);
-		           string date_sent = myReader["date_sent"].ToString();
+		           date_sent = Convert.ToDateTime(myReader["date_sent"]);
 		           continuous_service = Convert.ToInt32(myReader["continuous_service"]);
 		           auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 
@@ -830,9 +920,8 @@ namespace BlueDolphin.Renewal
 
 		}
 	}*/
-
-
                 return number_of_renewal_invoices_created;
+
             }
             catch (Exception e)
             {
@@ -901,9 +990,9 @@ namespace BlueDolphin.Renewal
 		            skus_status = Convert.ToInt32(myReader["skus_status"]);
 		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
 		            auto_renew = Convert.ToInt32(myReader["auto_renew"]);
-		            string is_gift = myReader["is_gift"].ToString();
+		            is_gift = Convert.ToInt32(myReader["is_gift"].ToString());
 		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
-		            string is_postcard_confirmation = myReader["is_postcard_confirmation"].ToString();
+		            is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
                 }
 
                 myReader.Close();
@@ -956,41 +1045,41 @@ namespace BlueDolphin.Renewal
                 myReader = command.ExecuteReader();
                 while (myReader.Read())
                 {
-                   // Pull data form our current renewal invoice.
-		billing_first_name = myReader["billing_first_name"].ToString();
-		billing_last_name = myReader["billing_last_name"].ToString();
-		billing_address_line_1 = myReader["billing_street_address"].ToString();
-		billing_city = myReader["billing_city"].ToString();
-		billing_state = myReader["billing_state"].ToString();
-		billing_postal_code = myReader["billing_postcode"].ToString();
-		delivery_first_name = myReader["delivery_first_name"].ToString();
-		delivery_last_name = myReader["delivery_last_name"].ToString();
-		delivery_address_line_1 = myReader["delivery_street_address"].ToString();
-		delivery_city = myReader["delivery_city"].ToString();
-		delivery_state = myReader["delivery_state"].ToString();
-		delivery_postal_code = myReader["delivery_postcode"].ToString();
-		renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
-		customers_id = Convert.ToInt32(myReader["customers_id"]);
-		orders_id = Convert.ToInt32(myReader["orders_id"]);
-		renewals_billing_series_code = myReader["renewals_billing_series_code"].ToString();
-		products_id = Convert.ToInt32(myReader["products_id"]);
-		skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-		renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
-		skus_status = Convert.ToInt32(myReader["skus_status"]);
-		products_name = myReader["products_name"].ToString();
-		skus_term = Convert.ToInt32(myReader["skus_term"]);
-		effort_number = Convert.ToInt32(myReader["effort_number"]);
-		date_purchased = Convert.ToDateTime(myReader["date_purchased"]);
-		amount_owed = Convert.ToDouble(myReader["amount_owed"]);
-		amount_paid = Convert.ToDouble(myReader["amount_paid"]);
-		price = Convert.ToDouble(myReader["products_price"]);
-		email_address = myReader["customers_email_address"].ToString();
-		continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-		auto_renew = Convert.ToInt32(myReader["auto_renew"]);
-		cc_number_display = myReader["cc_number_display"].ToString();
-		template_directory = myReader["tplDir"].ToString();
-		skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
+                               // Pull data form our current renewal invoice.
+		            billing_first_name = myReader["billing_first_name"].ToString();
+		            billing_last_name = myReader["billing_last_name"].ToString();
+		            billing_address_line_1 = myReader["billing_street_address"].ToString();
+		            billing_city = myReader["billing_city"].ToString();
+		            billing_state = myReader["billing_state"].ToString();
+		            billing_postal_code = myReader["billing_postcode"].ToString();
+		            delivery_first_name = myReader["delivery_first_name"].ToString();
+		            delivery_last_name = myReader["delivery_last_name"].ToString();
+		            delivery_address_line_1 = myReader["delivery_street_address"].ToString();
+		            delivery_city = myReader["delivery_city"].ToString();
+		            delivery_state = myReader["delivery_state"].ToString();
+		            delivery_postal_code = myReader["delivery_postcode"].ToString();
+		            renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
+		            customers_id = Convert.ToInt32(myReader["customers_id"]);
+		            orders_id = Convert.ToInt32(myReader["orders_id"]);
+		            renewals_billing_series_code = myReader["renewals_billing_series_code"].ToString();
+		            products_id = Convert.ToInt32(myReader["products_id"]);
+		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+		            prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+		            renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
+		            skus_status = Convert.ToInt32(myReader["skus_status"]);
+		            products_name = myReader["products_name"].ToString();
+		            skus_term = Convert.ToInt32(myReader["skus_term"]);
+		            effort_number = Convert.ToInt32(myReader["effort_number"]);
+		            date_purchased = Convert.ToDateTime(myReader["date_purchased"]);
+		            amount_owed = Convert.ToDouble(myReader["amount_owed"]);
+		            amount_paid = Convert.ToDouble(myReader["amount_paid"]);
+		            price = Convert.ToDouble(myReader["products_price"]);
+		            email_address = myReader["customers_email_address"].ToString();
+		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+		            auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+		            cc_number_display = myReader["cc_number_display"].ToString();
+		            template_directory = myReader["tplDir"].ToString();
+		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
 
 	/*	// Check to make sure we can still process this paper invoice.
 		// If not print why and stop processing renewal invoice.
@@ -1265,12 +1354,182 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static int create_renewal_order()
+        private static int create_renewal_order(int order, int renewals_billing_series_id, int is_perfect_renewal, int renewal_sku, int is_postcard_confirmation)
         {
             try
             {
+                int renewal_orders_id = 0;
 
-                return 1;
+
+                                                 /*   $renewal_order = array();
+	                                    $renewal_order_product = array();
+
+	                                    //get the columns array for neccessary tables.
+	                                    $orders_columns = unserialize(ORDERS_COLUMNS);
+	                                    $orders_products_columns = unserialize(ORDERS_PRODUCTS_COLUMNS);
+
+
+	                                    //now loop through each and create an array for each table with data from $order.
+	                                    //this allows us to just override the columns we want and have the rest automatically
+	                                    //copied over.
+	                                    for ($i=0, $n=sizeof($orders_columns); $i<$n; $i++) {
+		                                    $column_name = $orders_columns[$i];
+		                                    $renewal_order[$column_name] = $order[$column_name];
+	                                    }
+	                                    for ($i=0, $n=sizeof($orders_products_columns); $i<$n; $i++) {
+		                                    $column_name = $orders_products_columns[$i];
+		                                    $renewal_order_product[$column_name] = $order[$column_name];
+	                                    }
+
+	                                    $renewal_orders_id = '';
+
+	                                    //creates the parent order number.
+	                                    //and set it on the new order.
+	                                    tep_db_query("insert into orders_groups (orders_groups_id) VALUES ('')");
+	                                    $renewal_orders_groups_id = tep_db_insert_id();
+	                                    $renewal_order['orders_groups_id'] = $renewal_orders_groups_id;
+
+	                                    //If renewal cc data exists (renewal_payment_cards_id) on the original order, use it to set the cc fields for the renewal
+	                                    if($renewal_order['renewal_payment_cards_id']){
+		                                    $renewal_order['cc_type'] = $order['renewal_cc_type'];
+		                                    $renewal_order['cc_owner'] = $order['renewal_cc_owner'];
+		                                    $renewal_order['cc_expires'] = $order['renewal_cc_expires'];
+		                                    $renewal_order['cc_number'] = $order['renewal_cc_number'];
+		                                    $renewal_order['cc_number_display'] = $order['renewal_cc_number_display'];
+		                                    $renewal_order['payment_cards_id'] = $order['renewal_payment_cards_id'];
+		                                    $renewal_order['payment_method'] = 'cc';
+	                                    }
+
+	                                    // Account for "partner_paid" orders by setting them to "cc" for the renewal order (MCS 3/2015)
+	                                    if($renewal_order['payment_method'] == 'partner_paid') $renewal_order['payment_method'] = 'cc';
+
+	                                    //get rid of the unwanted fields
+	                                    unset($renewal_order['orders_id']);
+	                                    unset($renewal_order['renewal_payment_cards_id']);
+
+	                                    //THIS IS COMMENTED OUT SINCE IT SHOULD STAY A CC ORDER. IF IT IS A TRACK 2 IT WON'T GET PULLED
+	                                    //FOR CHARGING AND IF CHECK COMES IN, CUSTCARE CAN CHANGE IT THERE TO A CHECK ENTRY.
+	                                    //overwrite fields.
+	                                    //if this isn't a perfect renewal make this an invoice order.
+	                                    //but leave the credit card info in place for next year renewals (especially Master Card)
+	                                    //if (!$is_perfect_renewal) {
+	                                    //    	$renewal_order['payment_method'] = 'check';
+	                                    //     $renewal_order['cc_type'] = '';
+	                                    //     $renewal_order['cc_owner'] = '';
+	                                    //     $renewal_order['cc_number'] = '';
+	                                    //     $renewal_order['cc_expires']   = '';
+	                                    //     $renewal_order['cc_number_display']   = '';
+	                                    //     $renewal_order['payment_cards_id'] = 0;
+	                                    //}
+	                                    $renewal_order['last_modified'] ='null';
+	                                    $renewal_order['date_purchased'] = 'now()';
+	                                    //set to pending.
+	                                    $renewal_order['orders_status'] = DEFAULT_ORDERS_STATUS_ID;
+	                                    $renewal_order['orders_date_finished'] = 'null';
+	                                    $renewal_order['source_id'] = 'null';
+	                                    $renewal_order['source_id_time_entered'] = 'null';
+	                                    $renewal_order['source_id_type'] = 'null';
+	                                    $renewal_order['mystery_gifts_id'] = 'null';
+	                                    $renewal_order['quickshop_used'] = 0;
+	                                    //get the price from the renewal sku.
+	                                    $renewal_order['amount_owed'] = $renewal_sku['skus_price'];
+	                                    $renewal_order['amount_paid'] = 0;
+	                                    $renewal_order['is_buyagain'] = '0';
+	                                    $renewal_order['fulfillment_batch_id'] = 'null';
+	                                    $renewal_order['skus_id_used_for_fulfillment'] = 0;
+	                                    //renewal_date will be filled in when the the order is paid (when adding fulfill batch_item).
+	                                    $renewal_order['renewal_date'] = 'null';
+	                                    $renewal_order['renewal_invoices_created'] = 0;
+	                                    $renewal_order['renewal_invoices_sent'] = 0;
+	                                    //end_delivery_range will be setup when the order is paid(when adding fulfill batch_item).
+	                                    $renewal_order['end_delivery_range'] = '';
+	                                    $renewal_order['renewal_transaction_date'] = 'null';
+	                                    $renewal_order['renewal_orders_id'] = 'null';
+	                                    $renewal_order['prior_orders_id'] = $order['orders_id'];
+	                                    $renewal_order['is_renewal_order'] = 1;
+	                                    $renewal_order['renewals_billing_series_id'] = $renewals_billing_series_id;
+	                                    $renewal_order['is_gift'] = $order['is_gift'];
+	                                    $renewal_order['renewals_credit_card_charge_attempts'] = 0;
+	                                    if($is_postcard_confirmation) $renewal_order['is_postcard_confirmation'] = '1';
+	                                    if($is_postcard_confirmation) $renewal_order['postcard_confirmation_date'] = 'now()';
+
+	                                    //clear our delayed billing data.
+	                                    $renewal_order['is_delayed_billing'] = 0;
+	                                    $renewal_order['is_delayed_billing_paid'] = 0;
+	                                    $renewal_order['delayed_billing_date'] = 'null';
+	                                    $renewal_order['delayed_billing_credit_card_charge_attempts'] = 0;
+
+	                                    // clear renewal error
+	                                    $renewal_order['renewal_error'] = 0;
+	                                    $renewal_order['renewal_error_description'] = '';
+
+
+	                                    //this used to be on the original order now moved here.
+	                                    if ($is_perfect_renewal) {
+		                                    if($is_postcard_confirmation){
+			                                    $renewal_order['renewal_transaction_date'] = 'date_add(now(), INTERVAL ' . RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS . ' DAY)';
+		                                    }else{
+			                                    $renewal_order['renewal_transaction_date'] = 'date_add(now(), INTERVAL ' . DEFAULT_RENEWAL_CHARGE_DAYS . ' DAY)';
+		                                    }
+	                                    }
+
+	                                    tep_db_perform('orders', $renewal_order);
+	                                    $renewal_orders_id = tep_db_insert_id();
+
+	                                    if ($renewal_orders_id) {
+		                                    //orders_product table overwrites.
+		                                    unset($renewal_order_product['orders_products_id']);
+		                                    $renewal_order_product['orders_id'] = $renewal_orders_id;
+		                                    $renewal_order_product['skus_id'] = $renewal_sku['skus_id'];
+		                                    $renewal_order_product['products_price'] = $renewal_sku['skus_price'];
+		                                    $renewal_order_product['final_price'] = $renewal_sku['skus_price'];
+		                                    $renewal_order_product['location'] = 'renewal';
+
+		                                    tep_db_perform('orders_products', $renewal_order_product);
+
+		                                    //order_status_history
+		                                    $renewal_order_status_history = array();
+		                                    $renewal_order_status_history['orders_id'] = $renewal_orders_id;
+		                                    $renewal_order_status_history['orders_status_id'] = DEFAULT_ORDERS_STATUS_ID;
+		                                    $renewal_order_status_history['date_added'] = 'now()';
+		                                    $renewal_order_status_history['comments'] = DEFAULT_PENDING_COMMENT;
+		                                    tep_db_perform('orders_status_history', $renewal_order_status_history);
+
+		                                    //order_total (mimicking what the ot_ classes do.
+		                                    $renewal_order_total = array();
+		                                    $renewal_order_total['orders_id'] = $renewal_orders_id;
+		                                    $renewal_order_total['title'] = 'Total:';
+		                                    $renewal_order_total['text'] = "<b>" . get_currency_format($renewal_sku['skus_price'], $renewal_order['currency']) . "</b>";
+		                                    $renewal_order_total['value'] = $renewal_sku['skus_price'];
+		                                    $renewal_order_total['class'] = 'ot_total';
+		                                    $renewal_order_total['sort_order'] = '800';
+		                                    tep_db_perform('orders_total', $renewal_order_total);
+
+		                                    $renewal_order_subtotal = array();
+		                                    $renewal_order_subtotal['orders_id'] = $renewal_orders_id;
+		                                    $renewal_order_subtotal['title'] = 'Sub-Total:';
+		                                    $renewal_order_subtotal['text'] = get_currency_format($renewal_sku['skus_price'], $renewal_order['currency']);
+		                                    $renewal_order_subtotal['value'] = $renewal_sku['skus_price'];
+		                                    $renewal_order_subtotal['class'] = 'ot_subtotal';
+		                                    $renewal_order_subtotal['sort_order'] = '1';
+		                                    tep_db_perform('orders_total', $renewal_order_subtotal);
+
+	                                    } else {
+		                                    log_renewal_process("ERROR: Unable to create renewal order.", $order['orders_id']);
+	                                    }
+
+
+	                                    debug($renewal_order, 'renewal_order');
+	                                    debug($renewal_order_product, 'renewal_order_product');
+	                                    debug($renewal_order_total, 'renewal_order_total');
+	                                    debug($renewal_order_subtotal, 'renewal_order_subtotal');
+	                                    debug($order, 'order');
+
+
+	                                    return $renewal_orders_id; */
+
+
+                return renewal_orders_id;
             }
             catch (Exception e)
             {
@@ -1333,7 +1592,6 @@ namespace BlueDolphin.Renewal
             {
                 Console.WriteLine(e.Message);
 
-
             }
         }
 
@@ -1376,5 +1634,97 @@ namespace BlueDolphin.Renewal
                 
             }
         }
+
+                                /*  private static int get_fulfillment_batch_id($products_id, $fulfillment_status_id, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period) {
+
+                              //Because of potential transactional problems, we can't just do a search and then an insert, because
+                              //another thread might have inserted in between our select and insert. Locking won't work either because
+                              //we are using different threads each time we call tep_db_query. So I will just insert and the
+                              //newly added tep_db_query_return_error function will allow the insert to fail, but continue the script.
+                              // we can then check for error using tep_db_query_returned_error.
+                              $result = tep_db_query_return_error("insert into " . TABLE_FULFILLMENT_BATCH . " (date_added, fulfillment_batch_week, fulfillment_batch_date, fulfillment_status_id, products_id, skus_type, skus_type_order, skus_type_order_period)
+                                        values (now(), '" . $fulfillment_batch_week . "', '" . $fulfillment_batch_date . "', '" . $fulfillment_status_id . "', '" . $products_id . "', '" . $skus_type . "', '" . $skus_type_order . "', '" . $skus_type_order_period . "')");
+
+
+                              if (tep_db_query_returned_error()) {
+                                  //assuming duplicate error, so select batch_id form existing record.
+                                  $fulfillment_batch_query = tep_db_query("select fulfillment_batch_id from " . TABLE_FULFILLMENT_BATCH . " where products_id = '" . $products_id . "' and fulfillment_status_id = '" . $fulfillment_status_id . "' and fulfillment_batch_week = '" . $fulfillment_batch_week . "' and skus_type ='" . $skus_type . "' and skus_type_order = '" . $skus_type_order . "' and skus_type_order_period = '" . $skus_type_order_period . "'");
+                                  $fulfillment_batch_array = tep_db_fetch_array($fulfillment_batch_query);
+                                  $fulfillment_batch_id = $fulfillment_batch_array['fulfillment_batch_id'];
+                              } else {
+                                  //no error,so get the new id.
+                                  $fulfillment_batch_id = tep_db_insert_id();
+                              }
+
+                              return $fulfillment_batch_id;
+
+                          }
+                         
+                         
+                         
+                                 private static DateTime get_fulfillment_batch_week($compare_date = '') {
+                        if ($compare_date == '') {
+                        $compare_date = 'now()';
+                        }
+
+                        $batch_week_query = tep_db_query('SELECT fulfillment_batch_date, fulfillment_batch_week
+                                              FROM fulfillment_batch_week
+                                              WHERE to_days( fulfillment_batch_date )  >= to_days(' . $compare_date . ')
+                                              ORDER  BY fulfillment_batch_date ASC
+                                              LIMIT 1');
+                        return tep_db_fetch_array($batch_week_query);
+                        }
+                         
+                         
+                                 private static DateTime get_end_delivery_range($first_issue_delay_days) {
+                        $fulfillment_batch_week_array = get_fulfillment_batch_week();
+                        $fulfillment_batch_date = $fulfillment_batch_week_array['fulfillment_batch_date'];
+
+                        if ($first_issue_delay_days > 0) {
+                        $year = (int)substr($fulfillment_batch_date, 0, 4);
+                        $month = (int)substr($fulfillment_batch_date, 5, 2);
+                        $day = (int)substr($fulfillment_batch_date, 8, 2);
+                        $hour = (int)substr($fulfillment_batch_date, 11, 2);
+                        $minute = (int)substr($fulfillment_batch_date, 14, 2);
+                        $second = (int)substr($fulfillment_batch_date, 17, 2);
+
+                        //Calcuate the last day of the expected first issue date range.
+                        //The batch_date + 3 gets to Wednesday when orders are sent for fulfillment.
+                        //The first day of the range is the fulfillment day + the delay days.
+                        //10 days is added for the last day of the date range.
+
+                        $end_delivery_range_date = mktime($hour,$minute,$second,$month,$day,$year) + (86400 * ($first_issue_delay_days + 13));
+
+                        return strftime(DATE_FORMAT_DB, $end_delivery_range_date);
+                        } else {
+                        return;
+                        }
+                        }
+                               function get_end_delivery_range($first_issue_delay_days) {
+                        $fulfillment_batch_week_array = get_fulfillment_batch_week();
+                        $fulfillment_batch_date = $fulfillment_batch_week_array['fulfillment_batch_date'];
+
+                        if ($first_issue_delay_days > 0) {
+                        $year = (int)substr($fulfillment_batch_date, 0, 4);
+                        $month = (int)substr($fulfillment_batch_date, 5, 2);
+                        $day = (int)substr($fulfillment_batch_date, 8, 2);
+                        $hour = (int)substr($fulfillment_batch_date, 11, 2);
+                        $minute = (int)substr($fulfillment_batch_date, 14, 2);
+                        $second = (int)substr($fulfillment_batch_date, 17, 2);
+
+                        //Calcuate the last day of the expected first issue date range.
+                        //The batch_date + 3 gets to Wednesday when orders are sent for fulfillment.
+                        //The first day of the range is the fulfillment day + the delay days.
+                        //10 days is added for the last day of the date range.
+
+                        $end_delivery_range_date = mktime($hour,$minute,$second,$month,$day,$year) + (86400 * ($first_issue_delay_days + 13));
+
+                        return strftime(DATE_FORMAT_DB, $end_delivery_range_date);
+                        } else {
+                        return;
+                        }
+                        }
+                          
+                                 */
     }
 }
