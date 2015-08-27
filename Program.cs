@@ -221,7 +221,8 @@ namespace BlueDolphin.Renewal
         private static MySqlCommand command3;
         private static MySqlCommand command4;
         private static MySqlCommand command5;
-        private static MySqlCommand command5;
+        private static MySqlCommand command6;
+      
 
         static void Main(string[] args)
         {
@@ -371,6 +372,9 @@ namespace BlueDolphin.Renewal
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
+                if(Debug)
+                    Console.WriteLine("number of orders to be examined: " +  Convert.ToInt32(command.ExecuteScalar()).ToString() + "\n");
+
                 while (myReader.Read())
                 {
                    original_order_products_id = Convert.ToInt32(myReader["products_id"]);
@@ -430,47 +434,15 @@ namespace BlueDolphin.Renewal
                     command2 = new MySqlCommand(potential_renewal_skus_query_string, myConn);
                     command2.ExecuteNonQuery();
 
-             /*       if (DEBUG == 'true') print "number of renewal skus for product : " .  $original_order_products_id . ": " . tep_db_num_rows($potential_renewal_skus_query). "\n";
-
-		// START MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH (4/30/2012)
-		if (tep_db_num_rows($potential_renewal_skus_query) == 0) { // No renewal SKUs could be used for this order; record reason why and move on to next order.
-
-			// Were there no renewal SKUs at all?
-			$ANY_potential_renewal_skus_query_string = "select * from skus where products_id = '" . $original_order_products_id . "' and skus_type = 'RENEW'";
-			$ANY_potential_renewal_skus_query = tep_db_query($ANY_potential_renewal_skus_query_string);
-
-			if (tep_db_num_rows($ANY_potential_renewal_skus_query) == 0) {
-				tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: no renewal SKU exists for the PRODUCT in this order.' where orders_id=$original_order_id");
-			}
-			else { // Of the potential renewal SKUs, were there none for this order's SKUS_TYPE_ORDER?
-
-				$potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string = "select * from skus where products_id = '" . $original_order_products_id . "' and skus_type = 'RENEW' and skus_type_order='" . $original_order_skus_type_order . "'";
-				$potential_renewal_skus_for_SKUS_TYPE_ORDER_query = tep_db_query($potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string);
-				if (tep_db_num_rows($potential_renewal_skus_for_SKUS_TYPE_ORDER_query) == 0) {
-					tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: No renewal SKU(s) with the proper SKU TYPE ORDER (" . $original_order_skus_type_order . ") could be found for this order.' where orders_id=$original_order_id");
-				}
-				else { // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
-
-					$potential_ACTIVE_renewal_skus_query_string = "select * from skus where products_id = '" . $original_order_products_id . "' and skus_type = 'RENEW' and skus_type_order='" . $original_order_skus_type_order . "' and skus_status='1'";
-					$potential_ACTIVE_renewal_skus_query = tep_db_query($potential_ACTIVE_renewal_skus_query_string);
-					if (tep_db_num_rows($potential_ACTIVE_renewal_skus_query) == 0) {
-						tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: No ACTIVE renewal SKU(s) could be found for this order.' where orders_id=$original_order_id");
-					}
-					else{
-						tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: An UNKNOWN error has occured while searching for a renewal SKU for this order; please contact the administrator.' where orders_id=$original_order_id");
-					}
-				}
-			}
-			continue;
-		}
-		// END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH */
-
                     // Potential Renewal SKUs found: now find the right one
 		
 		            int previous_orders_skus_type_order_period = original_order_skus_type_order_period - 1;
 
                     MySqlDataReader myReader2;
                     myReader2 = command2.ExecuteReader();
+
+                    if(Debug)
+                        Console.Write("number of renewal skus for product : " + original_order_products_id.ToString() + ": " + Convert.ToInt32(command2.ExecuteScalar()).ToString() + "\n");
 
                     // START MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH (4/30/2012)
                     if (!myReader2.HasRows)  // No renewal SKUs could be used for this order; record reason why and move on to next order.
@@ -524,12 +496,13 @@ namespace BlueDolphin.Renewal
 
                                 if(!activeSku.HasRows)
                                 {
-                                    
+                                    command6 = new MySqlCommand("update " + TABLE_ORDERS + " set renewal_error='1', renewal_error_description='Error: No ACTIVE renewal SKU(s) could be found for this order.' where orders_id="+original_order_id.ToString(), myConn);
+                                    command6.ExecuteNonQuery();
                                 }
                                 else
                                 {
-                                    
-
+                                    command6 = new MySqlCommand("update " + TABLE_ORDERS + " set renewal_error='1', renewal_error_description='Error: An UNKNOWN error has occured while searching for a renewal SKU for this order; please contact the administrator.' where orders_id='"+original_order_id.ToString()+"'", myConn);
+                                    command6.ExecuteNonQuery();
                                 }
 
                                 activeSku.Close();
@@ -541,7 +514,7 @@ namespace BlueDolphin.Renewal
 
                         noSku.Close();
 
-                    }
+                    } // END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH
 
                     while (myReader2.Read())
                     {
@@ -1545,11 +1518,11 @@ namespace BlueDolphin.Renewal
             try
             {
 
-                //countries table, for each country name give us the country code.
-	/*$countries_query = tep_db_query("select * from countries");
+                            //countries table, for each country name give us the country code.
+	            /*$countries_query = tep_db_query("select * from countries");
 
-	while ($countries_array = tep_db_fetch_array($countries_query)) {
-		$all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];*/
+	            while ($countries_array = tep_db_fetch_array($countries_query)) {
+		            $all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];*/
 
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "select * from countries";
