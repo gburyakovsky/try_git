@@ -420,9 +420,9 @@ namespace BlueDolphin.Renewal
 				    products 
 				    publication_frequency pf
 			    where
-				    s.products_id = " + original_order_products_id.ToString() + @"
+				    s.products_id = '" + original_order_products_id.ToString() + @"'
 				    and s.skus_type = 'RENEW'
-				    and s.skus_type_order = " + original_order_skus_type_order.ToString() + @"
+				    and s.skus_type_order = '" + original_order_skus_type_order.ToString() + @"'
 				    and s.skus_status = 1
 				    and s.fulfillment_flag = 1
 				    and s.products_id = p.products_id
@@ -516,6 +516,9 @@ namespace BlueDolphin.Renewal
 
                     } // END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH
 
+
+                    // Potential Renewal SKUs found: now find the right one
+                  
                     while (myReader2.Read())
                     {
                         //since we go descending through the type orders year, we can look first for the renewal type order year,
@@ -523,8 +526,45 @@ namespace BlueDolphin.Renewal
                         //if $renewal_sku isn't populated at the end of this loop, it means we don't have any skus
                         //for renewal.
 
+                        //First check for the next renewal Sku.
+                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) == Convert.ToInt32(renewal_skus_type_order_period)) {
+				            //renewal_sku = command2.
+				            break;
+			            }
+                        //Second check for the original renewal skus type order
+                        //First check for the next renewal Sku.
+                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) == original_order_skus_type_order_period)
+                        {
+                            //renewal_sku = command2.
+                            break;
+                        }
+                        //now if we have already passed the original skus type order then go back to any previous ones.
+                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) < original_order_skus_type_order_period)
+                        {
+                            //renewal_sku = command2.
+                            if (previous_orders_skus_type_order_period > 0)
+                            {
+                                //check to see if there are any previous type order, if not, move on and see if there are
+				                //are any previous to that.
+                                if (Convert.ToInt32(myReader2["skus_type_order_period"]) == previous_orders_skus_type_order_period)
+                                {
 
+                                    //$renewal_sku = $potential_renewal_skus_array;
+						            break;
+                                }
+                                else
+                                {
 
+                                    previous_orders_skus_type_order_period--;
+                                }
+                            }
+                        }
+                    }
+
+                    if (Debug)
+                    {
+                        Console.WriteLine("Trying to find renewal skus  : " +  renewal_skus_type_order_period + ": ");
+                        //debug($renewal_sku, 'renewal_sku');
                     }
 
                     myReader2.Close();
@@ -704,7 +744,6 @@ namespace BlueDolphin.Renewal
 		if ( $renewals_billing_series_effort_number > 1 ) {
 			continue;
 		}*/
-
 
                 //only grab the last 30 days worth. No need to get all orders ever.
                 string renewal_orders_query_string = @"
@@ -1018,7 +1057,7 @@ namespace BlueDolphin.Renewal
                 myReader = command.ExecuteReader();
                 while (myReader.Read())
                 {
-                               // Pull data form our current renewal invoice.
+                    // Pull data form our current renewal invoice.
 		            billing_first_name = myReader["billing_first_name"].ToString();
 		            billing_last_name = myReader["billing_last_name"].ToString();
 		            billing_address_line_1 = myReader["billing_street_address"].ToString();
@@ -1127,10 +1166,10 @@ namespace BlueDolphin.Renewal
                      //move the invoice to history.
 		             //we use replace. If the server goes down right between these 2 stmts then the next time
 		             //it will still work.
-		             command2 = new MySqlCommand("replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = " + renewals_invoices_id.ToString(), myConn);
+		             command2 = new MySqlCommand("replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = '" + renewals_invoices_id.ToString()+"'", myConn);
                      command2.ExecuteNonQuery();
                      //remove old one
-                     command3 = new MySqlCommand("delete from renewals_invoices where renewals_invoices_id = " + renewals_invoices_id.ToString(), myConn);
+                     command3 = new MySqlCommand("delete from renewals_invoices where renewals_invoices_id = '" + renewals_invoices_id.ToString()+"'", myConn);
                      command3.ExecuteNonQuery();
                     
                     number_of_renewal_invoices_cleaned_up++;
@@ -1217,7 +1256,7 @@ namespace BlueDolphin.Renewal
 			            and fb.fulfillment_status_id = 1
 			            and op.products_id = p.products_id
 			            and op.skus_id = s.skus_id
-			            and o.orders_id = " + orders_id + @"
+			            and o.orders_id = '" + orders_id + @"'
 		            order by fbi.date_added desc
 		            limit 1";
 
@@ -1251,9 +1290,9 @@ namespace BlueDolphin.Renewal
 
                 if (skus_status == 0)
                 {
-                    string skus_status_check_query = "select * from skus where products_id = " + products_id.ToString() +
-                                                     " and skus_type = 'RENEW' and skus_type_order = " +
-                                                     skus_type_order.ToString() + " and skus_status = '1'";
+                    string skus_status_check_query = "select * from skus where products_id = '" + products_id.ToString() +
+                                                     "' and skus_type = 'RENEW' and skus_type_order = '" +
+                                                     skus_type_order.ToString() + "' and skus_status = '1'";
 
                     command = new MySqlCommand(skus_status_check_query, myConn);
                     command.ExecuteNonQuery();
@@ -1292,7 +1331,7 @@ namespace BlueDolphin.Renewal
                 // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
 	            if (prior_orders_id.ToString() != "") {
 		        
-                     command = new MySqlCommand("select * from orders where orders_id = " + prior_orders_id.ToString(), myConn);
+                     command = new MySqlCommand("select * from orders where orders_id = '" + prior_orders_id.ToString()+"'", myConn);
                      command.ExecuteNonQuery();
                      MySqlDataReader myReader;
                      myReader = command.ExecuteReader();
