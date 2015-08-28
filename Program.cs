@@ -516,7 +516,8 @@ namespace BlueDolphin.Renewal
 
                     } // END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH
 
-
+                    Dictionary<string, object> renewal_sku = new Dictionary<string, object>();
+                    
                     // Potential Renewal SKUs found: now find the right one
                   
                     while (myReader2.Read())
@@ -528,20 +529,27 @@ namespace BlueDolphin.Renewal
 
                         //First check for the next renewal Sku.
                         if (Convert.ToInt32(myReader2["skus_type_order_period"]) == Convert.ToInt32(renewal_skus_type_order_period)) {
-				            //renewal_sku = command2.
-				            break;
+
+                            for (int lp = 0; lp < myReader2.FieldCount; lp++)
+                            {
+                                renewal_sku.Add(myReader2.GetName(lp), myReader2.GetValue(lp));
+                            }
+                            break;
 			            }
+
                         //Second check for the original renewal skus type order
-                        //First check for the next renewal Sku.
                         if (Convert.ToInt32(myReader2["skus_type_order_period"]) == original_order_skus_type_order_period)
                         {
-                            //renewal_sku = command2.
+                            for (int lp = 0; lp < myReader2.FieldCount; lp++)
+                            {
+                                renewal_sku.Add(myReader2.GetName(lp), myReader2.GetValue(lp));
+                            }
                             break;
                         }
                         //now if we have already passed the original skus type order then go back to any previous ones.
                         if (Convert.ToInt32(myReader2["skus_type_order_period"]) < original_order_skus_type_order_period)
                         {
-                            //renewal_sku = command2.
+                            //only do this for type_order_period 1 and up.
                             if (previous_orders_skus_type_order_period > 0)
                             {
                                 //check to see if there are any previous type order, if not, move on and see if there are
@@ -549,12 +557,14 @@ namespace BlueDolphin.Renewal
                                 if (Convert.ToInt32(myReader2["skus_type_order_period"]) == previous_orders_skus_type_order_period)
                                 {
 
-                                    //$renewal_sku = $potential_renewal_skus_array;
+                                    for (int lp = 0; lp < myReader2.FieldCount; lp++)
+                                    {
+                                        renewal_sku.Add(myReader2.GetName(lp), myReader2.GetValue(lp));
+                                    }
 						            break;
                                 }
                                 else
                                 {
-
                                     previous_orders_skus_type_order_period--;
                                 }
                             }
@@ -566,6 +576,25 @@ namespace BlueDolphin.Renewal
                         Console.WriteLine("Trying to find renewal skus  : " +  renewal_skus_type_order_period + ": ");
                         //debug($renewal_sku, 'renewal_sku');
                     }
+
+                                //at this point we know there isn't any valid renewal sku, so move on to the next order.
+		            if (sizeof($renewal_sku) == 0) {
+
+			            //restored error_description
+		                string update_sql = "update " + TABLE_ORDERS +
+		                                    " set renewal_error='1', renewal_error_description='Error: renewal sku with proper sku type order period (1 to " +
+		                                    renewal_skus_type_order_period +
+		                                    ") does not exist for this order' where orders_id='" +
+		                                    original_order_id.ToString() + "'";
+			            
+                        command3 = new MySqlCommand(update_sql, myConn);
+		                command3.ExecuteNonQuery();
+
+			            if (Debug)
+                            Console.WriteLine("no renewal sku found\n");
+
+			            continue;
+		            }
 
                     myReader2.Close();
                 }
@@ -959,7 +988,7 @@ namespace BlueDolphin.Renewal
 
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = @"select *
-												from renewals_invoices ri,
+				from renewals_invoices ri,
 													 orders o,
 													 orders_products op,
 												     renewals_billing_series rbs,
