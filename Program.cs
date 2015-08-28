@@ -17,7 +17,7 @@ using MySql.Data.MySqlClient;
 
 namespace BlueDolphin.Renewal
 {
-    class BlueDolphinRenewal
+    internal class BlueDolphinRenewal
     {
 
         //debug variable
@@ -58,7 +58,10 @@ namespace BlueDolphin.Renewal
         public static string TABLE_PRODUCTS_NOTIFICATIONS = "products_notifications";
         public static string TABLE_PRODUCTS_OPTIONS = "products_options";
         public static string TABLE_PRODUCTS_OPTIONS_VALUES = "products_options_values";
-        public static string TABLE_PRODUCTS_OPTIONS_VALUES_TO_PRODUCTS_OPTIONS = "products_options_values_to_products_options";
+
+        public static string TABLE_PRODUCTS_OPTIONS_VALUES_TO_PRODUCTS_OPTIONS =
+            "products_options_values_to_products_options";
+
         public static string TABLE_PRODUCTS_TO_CATEGORIES = "products_to_categories";
         public static string TABLE_REVIEWS = "reviews";
         public static string TABLE_REVIEWS_DESCRIPTION = "reviews_description";
@@ -214,10 +217,12 @@ namespace BlueDolphin.Renewal
         /// <summary>
         /// 
         /// </summary>
-        
+
         //DatabaseTables dt = new DatabaseTables();
-        
-        public static string connectionString = ConfigurationManager.ConnectionStrings["databaseConnectionString"].ToString();
+
+        public static string connectionString =
+            ConfigurationManager.ConnectionStrings["databaseConnectionString"].ToString();
+
         public static MySqlConnection myConn = new MySqlConnection(connectionString);
         private static MySqlCommand command;
         private static MySqlCommand command2;
@@ -225,9 +230,9 @@ namespace BlueDolphin.Renewal
         private static MySqlCommand command4;
         private static MySqlCommand command5;
         private static MySqlCommand command6;
-      
 
-        static void Main(string[] args)
+
+        private static void Main(string[] args)
         {
             try
             {
@@ -244,77 +249,97 @@ namespace BlueDolphin.Renewal
 
                 //set up logging of script to file
 
-                Console.WriteLine("Begin renewal main"+"\n");
+                Console.WriteLine("Begin renewal main" + "\n");
                 //log_renewal_process("Begin renewal main");
                 email_body += "Begin renewal main \n\n";
 
                 Console.WriteLine("Begin init_renewal_orders");
                 //log_renewal_process("Begin init_renewal_orders");
                 number_of_renewal_orders_created = init_renewal_orders();
-                Console.WriteLine("End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString() + "\n");
+                Console.WriteLine("End init_renewal_orders. number of renewal orders created: " +
+                                  number_of_renewal_orders_created.ToString() + "\n");
                 //log_renewal_process("End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString());
-                email_body += "End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString()+"\n\n";
+                email_body += "End init_renewal_orders. number of renewal orders created: " +
+                              number_of_renewal_orders_created.ToString() + "\n\n";
 
                 //let"s charge first since if it fails we can create the 1015 right after this.
-	            Console.WriteLine("Begin charging renewal orders");
+                Console.WriteLine("Begin charging renewal orders");
                 //log_renewal_process("Begin charging renewal orders");
-	            number_of_renewal_orders_charged = charge_renewal_orders();
-                Console.WriteLine("End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString() + "\n");
+                number_of_renewal_orders_charged = charge_renewal_orders();
+                Console.WriteLine("End charging renewal orders. number of renewal orders charged: " +
+                                  number_of_renewal_orders_charged.ToString() + "\n");
                 //log_renewal_process("End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString());
-                email_body += "End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString()+ "\n\n";
-                
+                email_body += "End charging renewal orders. number of renewal orders charged: " +
+                              number_of_renewal_orders_charged.ToString() + "\n\n";
+
                 Console.WriteLine("Begin creating renewal invoices");
                 //log_renewal_process("Begin creating renewal invoices");
-	            number_of_renewal_invoices_created = create_first_effort_renewal_invoices();
-                Console.WriteLine("End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString() + "\n");
+                number_of_renewal_invoices_created = create_first_effort_renewal_invoices();
+                Console.WriteLine("End creating renewal invoices. number of renewal invoices created: " +
+                                  number_of_renewal_invoices_created.ToString() + "\n");
                 //log_renewal_process("End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString());
-                email_body += "End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString() +"\n\n";
+                email_body += "End creating renewal invoices. number of renewal invoices created: " +
+                              number_of_renewal_invoices_created.ToString() + "\n\n";
 
                 Console.WriteLine("Begin creating additional renewal invoices");
                 //log_renewal_process("Begin creating additional renewal invoices");
                 number_of_additional_renewal_invoices_created = create_additional_renewal_invoices();
-                Console.WriteLine("End creating additional renewal invoices. number of additional renewal invoices created: " + number_of_additional_renewal_invoices_created.ToString() + "\n");
+                Console.WriteLine(
+                    "End creating additional renewal invoices. number of additional renewal invoices created: " +
+                    number_of_additional_renewal_invoices_created.ToString() + "\n");
                 //log_renewal_process("End creating additional renewal invoices. number of additional renewal invoices created: " + number_of_additional_renewal_invoices_created.ToString());
-                email_body += "End creating additional renewal invoices. number of additional renewal invoices created: " + number_of_additional_renewal_invoices_created.ToString() + "\n\n";
+                email_body +=
+                    "End creating additional renewal invoices. number of additional renewal invoices created: " +
+                    number_of_additional_renewal_invoices_created.ToString() + "\n\n";
 
                 Console.WriteLine("Begin sending renewal email invoices");
                 //log_renewal_process("Begin sending renewal email invoices");
                 number_of_renewal_email_invoices_sent = send_renewal_email_invoices();
-                Console.WriteLine("End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString() + "\n");
+                Console.WriteLine("End sending renewal email invoices. number of renewal email invoices sent: " +
+                                  number_of_renewal_email_invoices_sent.ToString() + "\n");
                 //log_renewal_process("End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString());
-                email_body += "End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString() + "\n\n";
+                email_body += "End sending renewal email invoices. number of renewal email invoices sent: " +
+                              number_of_renewal_email_invoices_sent.ToString() + "\n\n";
 
                 Console.WriteLine("Begin creating renewal paper invoices file");
                 //log_renewal_process("Begin creating renewal paper invoices file");
                 number_of_renewal_paper_invoices_file_records = create_renewal_paper_invoices_file();
-                Console.WriteLine("End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString() + "\n");
+                Console.WriteLine(
+                    "End creating renewal paper invoices file. number of renewal paper invoices file records: " +
+                    number_of_renewal_paper_invoices_file_records.ToString() + "\n");
                 //log_renewal_process("End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString());
-                email_body += "End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString() + "\n\n";
-              
+                email_body +=
+                    "End creating renewal paper invoices file. number of renewal paper invoices file records: " +
+                    number_of_renewal_paper_invoices_file_records.ToString() + "\n\n";
+
                 Console.WriteLine("Begin cleaning up renewal invoices");
                 //log_renewal_process("Begin cleaning up renewal invoices");
                 number_of_invoices_cleaned_up = clean_up_renewal_invoices();
-                Console.WriteLine("End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString() + "\n");
+                Console.WriteLine("End cleaning up renewal invoices. number of renewal invoices cleaned up: " +
+                                  number_of_invoices_cleaned_up.ToString() + "\n");
                 //log_renewal_process("End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString());
-                email_body += "End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString() + "\n\n";
+                email_body += "End cleaning up renewal invoices. number of renewal invoices cleaned up: " +
+                              number_of_invoices_cleaned_up.ToString() + "\n\n";
 
                 //now see if we need to cancel any renewal orders.
                 Console.WriteLine("Begin mass cancelling renewal orders");
                 //log_renewal_process("Begin mass cancelling renewal orders");
                 number_of_renewal_orders_mass_cancelled = mass_cancel_renewal_orders();
-                Console.WriteLine("End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString() + "\n");
+                Console.WriteLine("End mass cancelling renewal orders. number of renewal orders mass cancelled: " +
+                                  number_of_renewal_orders_mass_cancelled.ToString() + "\n");
                 //log_renewal_process("End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString());
-                email_body += "End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString() + "\n\n";
+                email_body += "End mass cancelling renewal orders. number of renewal orders mass cancelled: " +
+                              number_of_renewal_orders_mass_cancelled.ToString() + "\n\n";
 
                 Console.WriteLine("End renewal main");
                 log_renewal_process("End renewal main");
-	            email_body += "End renewal main \n\n";
+                email_body += "End renewal main \n\n";
 
                 // Send e-mail saying we have completed the renewal run.
-	            //tep_mail("M2 Media Group Jobs", "jobs@m2mediagroup.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
-	            //tep_mail("Michael Borchetta", "mborchetta@m2mediagroup.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
-	            //tep_mail("Martin Schmidt", "mschmidt@mcswebsolutions.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
-                
+                //tep_mail("M2 Media Group Jobs", "jobs@m2mediagroup.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
+                //tep_mail("Michael Borchetta", "mborchetta@m2mediagroup.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
+                //tep_mail("Martin Schmidt", "mschmidt@mcswebsolutions.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
+
                 myConn.Close();
 
                 Console.ReadLine();
@@ -322,7 +347,7 @@ namespace BlueDolphin.Renewal
 
             catch (Exception e)
             {
-                
+
                 Console.WriteLine(e.Message);
 
             }
@@ -339,7 +364,7 @@ namespace BlueDolphin.Renewal
                 //select all orders that have a continuous_service, with no renewal invoices created,
                 // user want to renew (auto_renew), paid orders and renewal notice < today.
 
-                        string create_renewal_orders_query_string = @"
+                string create_renewal_orders_query_string = @"
 		        SELECT
 			        o.`renewal_payment_cards_id`,
 			        pc.cc_type AS renewal_cc_type,
@@ -376,37 +401,42 @@ namespace BlueDolphin.Renewal
                 myReader = command.ExecuteReader();
 
 
-                if(Debug)
-                    Console.WriteLine("number of orders to be examined: " +  Convert.ToInt32(command.ExecuteScalar()).ToString() + "\n");
+                if (Debug)
+                    Console.WriteLine("number of orders to be examined: " +
+                                      Convert.ToInt32(command.ExecuteScalar()).ToString() + "\n");
 
                 while (myReader.Read())
                 {
-                   original_order_products_id = Convert.ToInt32(myReader["products_id"]);
-		           original_order_skus_id = Convert.ToInt32(myReader["skus_id"]);
-		           original_order_skus_type = myReader["skus_type"].ToString();
-		           original_order_skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		           original_order_skus_type_order_period = Convert.ToInt32(myReader["skus_type_order_period"]);
-		           original_order_id = Convert.ToInt32(myReader["orders_id"]);
-		           original_products_status = Convert.ToInt32(myReader["products_status"]);
-		            // Is it a postcard confirmation?
-		           original_is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
+                    original_order_products_id = Convert.ToInt32(myReader["products_id"]);
+                    original_order_skus_id = Convert.ToInt32(myReader["skus_id"]);
+                    original_order_skus_type = myReader["skus_type"].ToString();
+                    original_order_skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                    original_order_skus_type_order_period = Convert.ToInt32(myReader["skus_type_order_period"]);
+                    original_order_id = Convert.ToInt32(myReader["orders_id"]);
+                    original_products_status = Convert.ToInt32(myReader["products_status"]);
+                    // Is it a postcard confirmation?
+                    original_is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
 
-		            //if the original sku was an intro sku then use the 1st RENEW sku type_order_period for the same
-		            //skus_type_order
+                    //if the original sku was an intro sku then use the 1st RENEW sku type_order_period for the same
+                    //skus_type_order
 
                     if (original_order_skus_type.ToString() == "INTRO")
                     {
                         renewal_skus_type_order_period = "1";
 
-                    } else {
+                    }
+                    else
+                    {
 
-			            //add 1 to the renewal skus type order year to get the next renewal sku in line for the same
-			            //skus_type_order.
-			            renewal_skus_type_order_period = (Convert.ToInt32(original_order_skus_type_order_period) + 1).ToString();
-		            }
+                        //add 1 to the renewal skus type order year to get the next renewal sku in line for the same
+                        //skus_type_order.
+                        renewal_skus_type_order_period =
+                            (Convert.ToInt32(original_order_skus_type_order_period) + 1).ToString();
+                    }
 
-                    if (Debug) 
-                        Console.WriteLine( "order number: " +  original_order_id.ToString() + " renewal_skus_type_order_period: " +  renewal_skus_type_order_period + "\n");
+                    if (Debug)
+                        Console.WriteLine("order number: " + original_order_id.ToString() +
+                                          " renewal_skus_type_order_period: " + renewal_skus_type_order_period + "\n");
 
                     //check to make sure that the renewal skus is available and if it is is active.
                     //if the sku isn"t available and the original sku was an INTRO sku no renewals are possible.
@@ -415,7 +445,7 @@ namespace BlueDolphin.Renewal
                     //we check for the s.skus_type_order = $original_order_skus_type_order since we might be renewing
                     //a 2 year pub we need to use the 2 year pub renewal skus for that.
 
-                        string potential_renewal_skus_query_string = @"
+                    string potential_renewal_skus_query_string = @"
 			    select
 				    *,
 				    if(p.first_issue_delay_days=0,pf.first_issue_delay_days, p.first_issue_delay_days) as first_issue_delay_days
@@ -439,20 +469,24 @@ namespace BlueDolphin.Renewal
                     command2.ExecuteNonQuery();
 
                     // Potential Renewal SKUs found: now find the right one
-		
-		            int previous_orders_skus_type_order_period = original_order_skus_type_order_period - 1;
+
+                    int previous_orders_skus_type_order_period = original_order_skus_type_order_period - 1;
 
                     MySqlDataReader myReader2;
                     myReader2 = command2.ExecuteReader();
 
-                    if(Debug)
-                        Console.Write("number of renewal skus for product : " + original_order_products_id.ToString() + ": " + Convert.ToInt32(command2.ExecuteScalar()).ToString() + "\n");
+                    if (Debug)
+                        Console.Write("number of renewal skus for product : " + original_order_products_id.ToString() +
+                                      ": " + Convert.ToInt32(command2.ExecuteScalar()).ToString() + "\n");
 
                     // START MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH (4/30/2012)
-                    if (!myReader2.HasRows)  // No renewal SKUs could be used for this order; record reason why and move on to next order.
+                    if (!myReader2.HasRows)
+                        // No renewal SKUs could be used for this order; record reason why and move on to next order.
                     {
                         // Were there no renewal SKUs at all?
-                        string ANY_potential_renewal_skus_query_string = "select * from skus where products_id = '" + original_order_products_id + "' and skus_type = 'RENEW'";
+                        string ANY_potential_renewal_skus_query_string = "select * from skus where products_id = '" +
+                                                                         original_order_products_id +
+                                                                         "' and skus_type = 'RENEW'";
                         command3 = new MySqlCommand(ANY_potential_renewal_skus_query_string, myConn);
                         command3.ExecuteNonQuery();
 
@@ -470,12 +504,15 @@ namespace BlueDolphin.Renewal
                         }
                         else // Of the potential renewal SKUs, were there none for this order's SKUS_TYPE_ORDER?
                         {
-                           string potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string = "select * from skus where products_id = '" + original_order_products_id.ToString() + "' and skus_type = 'RENEW' and skus_type_order='" + original_order_skus_type_order.ToString()+"'";
-                           command4 = new MySqlCommand(potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string, myConn);
-                           command4.ExecuteNonQuery();
+                            string potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string =
+                                "select * from skus where products_id = '" + original_order_products_id.ToString() +
+                                "' and skus_type = 'RENEW' and skus_type_order='" +
+                                original_order_skus_type_order.ToString() + "'";
+                            command4 = new MySqlCommand(potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string, myConn);
+                            command4.ExecuteNonQuery();
 
-                           MySqlDataReader yesSku;
-                           yesSku = command4.ExecuteReader();
+                            MySqlDataReader yesSku;
+                            yesSku = command4.ExecuteReader();
 
                             if (!yesSku.HasRows)
                             {
@@ -488,24 +525,36 @@ namespace BlueDolphin.Renewal
                                 command5.ExecuteNonQuery();
 
                             }
-                            else  // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
+                            else
+                            // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
                             {
 
-                                string potential_ACTIVE_renewal_skus_query_string = "select * from skus where products_id = '" + original_order_products_id.ToString() + "' and skus_type = 'RENEW' and skus_type_order='" + original_order_skus_type_order.ToString() + "' and skus_status='1'";
+                                string potential_ACTIVE_renewal_skus_query_string =
+                                    "select * from skus where products_id = '" + original_order_products_id.ToString() +
+                                    "' and skus_type = 'RENEW' and skus_type_order='" +
+                                    original_order_skus_type_order.ToString() + "' and skus_status='1'";
                                 command5 = new MySqlCommand(potential_ACTIVE_renewal_skus_query_string, myConn);
                                 command5.ExecuteNonQuery();
 
-                                 MySqlDataReader activeSku;
-                                 activeSku = command5.ExecuteReader();
+                                MySqlDataReader activeSku;
+                                activeSku = command5.ExecuteReader();
 
-                                if(!activeSku.HasRows)
+                                if (!activeSku.HasRows)
                                 {
-                                    command6 = new MySqlCommand("update " + TABLE_ORDERS + " set renewal_error='1', renewal_error_description='Error: No ACTIVE renewal SKU(s) could be found for this order.' where orders_id="+original_order_id.ToString(), myConn);
+                                    command6 =
+                                        new MySqlCommand(
+                                            "update " + TABLE_ORDERS +
+                                            " set renewal_error='1', renewal_error_description='Error: No ACTIVE renewal SKU(s) could be found for this order.' where orders_id=" +
+                                            original_order_id.ToString(), myConn);
                                     command6.ExecuteNonQuery();
                                 }
                                 else
                                 {
-                                    command6 = new MySqlCommand("update " + TABLE_ORDERS + " set renewal_error='1', renewal_error_description='Error: An UNKNOWN error has occured while searching for a renewal SKU for this order; please contact the administrator.' where orders_id='"+original_order_id.ToString()+"'", myConn);
+                                    command6 =
+                                        new MySqlCommand(
+                                            "update " + TABLE_ORDERS +
+                                            " set renewal_error='1', renewal_error_description='Error: An UNKNOWN error has occured while searching for a renewal SKU for this order; please contact the administrator.' where orders_id='" +
+                                            original_order_id.ToString() + "'", myConn);
                                     command6.ExecuteNonQuery();
                                 }
 
@@ -533,17 +582,20 @@ namespace BlueDolphin.Renewal
                         //for renewal.
 
                         //First check for the next renewal Sku.
-                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) == Convert.ToInt32(renewal_skus_type_order_period)) {
+                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) ==
+                            Convert.ToInt32(renewal_skus_type_order_period))
+                        {
 
                             for (int lp = 0; lp < myReader2.FieldCount; lp++)
                             {
                                 renewal_sku.Add(myReader2.GetName(lp), myReader2.GetValue(lp));
                             }
                             break;
-			            }
+                        }
 
                         //Second check for the original renewal skus type order
-                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) == original_order_skus_type_order_period)
+                        if (Convert.ToInt32(myReader2["skus_type_order_period"]) ==
+                            original_order_skus_type_order_period)
                         {
                             for (int lp = 0; lp < myReader2.FieldCount; lp++)
                             {
@@ -558,15 +610,16 @@ namespace BlueDolphin.Renewal
                             if (previous_orders_skus_type_order_period > 0)
                             {
                                 //check to see if there are any previous type order, if not, move on and see if there are
-				                //are any previous to that.
-                                if (Convert.ToInt32(myReader2["skus_type_order_period"]) == previous_orders_skus_type_order_period)
+                                //are any previous to that.
+                                if (Convert.ToInt32(myReader2["skus_type_order_period"]) ==
+                                    previous_orders_skus_type_order_period)
                                 {
 
                                     for (int lp = 0; lp < myReader2.FieldCount; lp++)
                                     {
                                         renewal_sku.Add(myReader2.GetName(lp), myReader2.GetValue(lp));
                                     }
-						            break;
+                                    break;
                                 }
                                 else
                                 {
@@ -578,7 +631,7 @@ namespace BlueDolphin.Renewal
 
                     if (Debug)
                     {
-                        Console.WriteLine("Trying to find renewal skus  : " +  renewal_skus_type_order_period + ": ");
+                        Console.WriteLine("Trying to find renewal skus  : " + renewal_skus_type_order_period + ": ");
                         //debug($renewal_sku, 'renewal_sku');
                     }
 
@@ -617,12 +670,13 @@ namespace BlueDolphin.Renewal
                     if (isPerfectRenewal(orders_array))
                     {
                         renewals_billing_series_id = Convert.ToInt32(TRACK1);
-			            is_perfect_renewal = true;
+                        is_perfect_renewal = true;
                     }
                     else
                     {
 
-                        if (orders_array["cc_number"].ToString() == string.Empty && orders_array["renewal_cc_number"].ToString() == string.Empty)
+                        if (orders_array["cc_number"].ToString() == string.Empty &&
+                            orders_array["renewal_cc_number"].ToString() == string.Empty)
                         {
                             renewals_billing_series_id = Convert.ToInt32(TRACK2_CHECK);
                         }
@@ -637,11 +691,37 @@ namespace BlueDolphin.Renewal
 
                     }
 
-                    if(Debug)
-                        Console.WriteLine("Perfect Renewal: " + is_perfect_renewal.ToString() + "; track chosen: " + renewals_billing_series_id.ToString() + "\n");
-                    
+                    if (Debug)
+                        Console.WriteLine("Perfect Renewal: " + is_perfect_renewal.ToString() + "; track chosen: " +
+                                          renewals_billing_series_id.ToString() + "\n");
+
                     //create the order and if succeeded, we will update the original order with renewal info and also so it won't be pulled again for renewals.
-                
+                    renewal_orders_id = 0;
+                    renewal_orders_id = create_renewal_order(orders_array, renewals_billing_series_id,
+                        is_perfect_renewal, renewal_sku, is_postcard_confirmation);
+
+                    if (renewal_orders_id != 0)
+                    {
+
+                        // Update our original order setting the renewal_date to null to prevent the order from being picked up again and
+                        // a duplicate renewal being created. Also set renewal_orders_id so we can associate the original and renewal orders.
+
+                        command4 = new MySqlCommand(@"update orders
+						  set renewal_orders_id = '" + renewal_orders_id.ToString() +
+                                                    "', renewal_date = null, renewal_payment_cards_id = '' where orders_id = '" +
+                                                    original_order_id.ToString() + "'",
+                            myConn);
+                        command4.ExecuteNonQuery();
+
+                        if (Debug)
+                            Console.WriteLine("Created renewal order\n");
+
+                    }
+
+                    if (Debug)
+                        Console.WriteLine("\n\n");
+
+                    number_of_renew_invoices_prepared++;
                 }
 
                 myReader.Close();
@@ -661,21 +741,21 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-                
-                //make sure we have sent them renewalinvoices
-	            //eg IF orderItem.renewal_invoices_sent > 0 THEN
-	            //
-	            //if the charge fails we need to put the user in track 2 1015
-	            //move all invoices from renewals_invoices to renewal_invoices_history with
-	            //comments: Changed from 1014 to 1015.
-	            //create new invoices based for 1015.
-	            //make sure to update the order"s renewals_billing_series_id to the new one.
 
-	            //make sure the order is still PENDING, they might have paid already.
+                //make sure we have sent them renewalinvoices
+                //eg IF orderItem.renewal_invoices_sent > 0 THEN
+                //
+                //if the charge fails we need to put the user in track 2 1015
+                //move all invoices from renewals_invoices to renewal_invoices_history with
+                //comments: Changed from 1014 to 1015.
+                //create new invoices based for 1015.
+                //make sure to update the order"s renewals_billing_series_id to the new one.
+
+                //make sure the order is still PENDING, they might have paid already.
 
                 int number_of_renewal_charged = 0;
 
-	            string charge_renewal_orders_query_string = @"
+                string charge_renewal_orders_query_string = @"
 		            select
 			            sk.override_renewal_billing_descriptor,
 			            o.*, op.*, s.*,
@@ -703,7 +783,7 @@ namespace BlueDolphin.Renewal
 	            ";
 
                 command = new MySqlCommand(charge_renewal_orders_query_string, myConn);
-  
+
                 command.ExecuteNonQuery();
 
                 MySqlDataReader myReader;
@@ -711,49 +791,50 @@ namespace BlueDolphin.Renewal
 
                 while (myReader.Read())
                 {
-       
+
                     customers_id = Convert.ToInt32(myReader["customers_id"]);
-		            orders_id = Convert.ToInt32(myReader["orders_id"]);
-		            products_id = Convert.ToInt32(myReader["products_id"]);
-		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		            prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-		            renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
-		            skus_status = Convert.ToInt32(myReader["skus_status"]);
-		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-		            auto_renew = Convert.ToInt32(myReader["auto_renew"]);
-		            renewal_orders_id = Convert.ToInt32(myReader["orders_id"]);
-		            renewal_invoices_created = Convert.ToInt32(myReader["renewal_invoices_created"]);
-		            renewal_invoices_sent = Convert.ToInt32(myReader["renewal_invoices_sent"]);
-		            final_price = Convert.ToDouble(myReader["final_price"]);
-		            cc_number = myReader["cc_number"].ToString();
-		            cc_expires = myReader["cc_expires"].ToString();
-		            email_address = myReader["customers_email_address"].ToString();
-		            billing_first_name = myReader["billing_first_name"].ToString();
-		            billing_last_name = myReader["billing_last_name"].ToString();
-		            billing_address =  myReader["billing_street_address"].ToString();
-		            billing_city = myReader["billing_city"].ToString();
-		            billing_state = myReader["billing_state"].ToString();
-		            billing_postcode = myReader["billing_postcode"].ToString();
-		            billing_country =  myReader["billing_country"].ToString();
-		            renewals_credit_card_charge_attempts = Convert.ToInt32(myReader["renewals_credit_card_charge_attempts"]) + 1;
-		            renewals_expiration_date_failures = Convert.ToInt32(myReader["renewals_expiration_date_failures"]);
-		            is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
-		            payment_cards_id = Convert.ToInt32(myReader["payment_cards_id"]);
-		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
-		            override_renewal_billing_descriptor = myReader["override_renewal_billing_descriptor"].ToString();
-		            products_billing_descriptor = myReader["products_billing_descriptor"].ToString();
+                    orders_id = Convert.ToInt32(myReader["orders_id"]);
+                    products_id = Convert.ToInt32(myReader["products_id"]);
+                    skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                    prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+                    renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
+                    skus_status = Convert.ToInt32(myReader["skus_status"]);
+                    continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+                    auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    renewal_orders_id = Convert.ToInt32(myReader["orders_id"]);
+                    renewal_invoices_created = Convert.ToInt32(myReader["renewal_invoices_created"]);
+                    renewal_invoices_sent = Convert.ToInt32(myReader["renewal_invoices_sent"]);
+                    final_price = Convert.ToDouble(myReader["final_price"]);
+                    cc_number = myReader["cc_number"].ToString();
+                    cc_expires = myReader["cc_expires"].ToString();
+                    email_address = myReader["customers_email_address"].ToString();
+                    billing_first_name = myReader["billing_first_name"].ToString();
+                    billing_last_name = myReader["billing_last_name"].ToString();
+                    billing_address = myReader["billing_street_address"].ToString();
+                    billing_city = myReader["billing_city"].ToString();
+                    billing_state = myReader["billing_state"].ToString();
+                    billing_postcode = myReader["billing_postcode"].ToString();
+                    billing_country = myReader["billing_country"].ToString();
+                    renewals_credit_card_charge_attempts =
+                        Convert.ToInt32(myReader["renewals_credit_card_charge_attempts"]) + 1;
+                    renewals_expiration_date_failures = Convert.ToInt32(myReader["renewals_expiration_date_failures"]);
+                    is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
+                    payment_cards_id = Convert.ToInt32(myReader["payment_cards_id"]);
+                    skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
+                    override_renewal_billing_descriptor = myReader["override_renewal_billing_descriptor"].ToString();
+                    products_billing_descriptor = myReader["products_billing_descriptor"].ToString();
 
                     // echo "Products Billing Descriptor Override: $override_renewal_billing_descriptor\n";
 
-		            //if the expiration date is expired, we should increase by 1 year.
+                    //if the expiration date is expired, we should increase by 1 year.
                     cc_expires_year = cc_expires.Substring(2, 2);
                     cc_expires_month = cc_expires.Substring(0, 2);
 
                 }
 
-                     myReader.Close();
+                myReader.Close();
 
-                           /* var transaction = new Dictionary<string, string>();
+                /* var transaction = new Dictionary<string, string>();
 
                             transaction["USER"] = "";
                             transaction["VENDOR"] = "";
@@ -856,19 +937,19 @@ namespace BlueDolphin.Renewal
                 while (myReader.Read())
                 {
                     renewal_orders_id = Convert.ToInt32(myReader["orders_id"]);
-			        renewal_orders_customers_id = Convert.ToInt32(myReader["customers_id"]);
-			        products_status = Convert.ToInt32(myReader["products_status"]);
-			        skus_status = Convert.ToInt32(myReader["skus_status"]);
-			        continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-			        products_id = Convert.ToInt32(myReader["products_id"]);
-			        skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-			        prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-			        auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    renewal_orders_customers_id = Convert.ToInt32(myReader["customers_id"]);
+                    products_status = Convert.ToInt32(myReader["products_status"]);
+                    skus_status = Convert.ToInt32(myReader["skus_status"]);
+                    continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+                    products_id = Convert.ToInt32(myReader["products_id"]);
+                    skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                    prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+                    auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 
                     //Let's check to make sure the user hasn't already been entered for the same order
-			//if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
-			// it will allow us to continue. Which is what we want here.
-			/*$create_renewal_invoice_query_string = "insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
+                    //if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
+                    // it will allow us to continue. Which is what we want here.
+                    /*$create_renewal_invoice_query_string = "insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
                           values (now(), '" . $renewal_orders_id . "', '" . $renewal_orders_customers_id . "', '" . $renewals_billing_series_id . "', '1', '1')";
 
 			$result = tep_db_query_return_error($create_renewal_invoice_query_string);
@@ -884,8 +965,8 @@ namespace BlueDolphin.Renewal
                 }
 
                 myReader.Close();
-            //}
-            return number_of_renewal_invoices_created;
+                //}
+                return number_of_renewal_invoices_created;
             }
             catch (Exception e)
             {
@@ -905,16 +986,16 @@ namespace BlueDolphin.Renewal
                 int number_of_renewal_invoices_created = 0;
 
                 //rearrange the billing series array so we can pick the next effort
-	            //for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
-		        //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
-	
+                //for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
+                //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
+
                 //rearrange the billing series array so we can pick the next effort
-	                //for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
-		                //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
+                //for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
+                //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
                 //	}
 
-                            command = new MySqlCommand(string.Empty, myConn);
-                            command.CommandText = @"
+                command = new MySqlCommand(string.Empty, myConn);
+                command.CommandText = @"
 		            select *
 		            from renewals_invoices ri,
 			            orders o,
@@ -938,31 +1019,31 @@ namespace BlueDolphin.Renewal
                 myReader = command.ExecuteReader();
                 while (myReader.Read())
                 {
-                   renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
-		           customers_id = Convert.ToInt32(myReader["customers_id"]);
-		           orders_id = Convert.ToInt32(myReader["orders_id"]);
-		           renewals_billing_series_id = Convert.ToInt32(myReader["renewals_billing_series_id"]);
-		           renewals_billing_series_effort_number = Convert.ToInt32(myReader["effort_number"]);
-		           products_id = Convert.ToInt32(myReader["products_id"]);
-		           skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		           prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-		           renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
-		           skus_status = Convert.ToInt32(myReader["skus_status"]);
-		           date_sent = Convert.ToDateTime(myReader["date_sent"]);
-		           continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-		           auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
+                    customers_id = Convert.ToInt32(myReader["customers_id"]);
+                    orders_id = Convert.ToInt32(myReader["orders_id"]);
+                    renewals_billing_series_id = Convert.ToInt32(myReader["renewals_billing_series_id"]);
+                    renewals_billing_series_effort_number = Convert.ToInt32(myReader["effort_number"]);
+                    products_id = Convert.ToInt32(myReader["products_id"]);
+                    skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                    prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+                    renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
+                    skus_status = Convert.ToInt32(myReader["skus_status"]);
+                    date_sent = Convert.ToDateTime(myReader["date_sent"]);
+                    continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+                    auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 
-		           bool create_next_effort = true;
+                    bool create_next_effort = true;
 
-		           int next_effort_number = renewals_billing_series_effort_number+1;
+                    int next_effort_number = renewals_billing_series_effort_number + 1;
 
                 }
 
                 myReader.Close();
 
                 //check to see if the order is still valid for invoice creation, if not then update the invoice
-		//and move on to next order.
-	/*	$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
+                //and move on to next order.
+                /*	$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
 		if ($check_renewal_order_result !== true) {
 			$comment = "Next effort for this invoice was not created because " . $check_renewal_order_result;
 			tep_db_query("update renewals_invoices set in_progress = 0, comments="" . tep_db_input($comment) . "" where renewals_invoices_id = "" . $renewals_invoices_id . """);
@@ -1015,19 +1096,19 @@ namespace BlueDolphin.Renewal
                 return 0;
 
             }
-           
+
         }
 
         private static int send_renewal_email_invoices()
         {
             try
             {
-                       /*     global $currency;
+                /*     global $currency;
 
 	            $currency = (USE_DEFAULT_LANGUAGE_CURRENCY == "true") ? LANGUAGE_CURRENCY : DEFAULT_CURRENCY;
 	            $currencies = new currencies();  */
 
-	            //go through only pending orders, which haven"t been sent yet and are in progress
+                //go through only pending orders, which haven"t been sent yet and are in progress
 
                 int number_of_email_renewal_invoices_sent = 0;
 
@@ -1056,29 +1137,29 @@ namespace BlueDolphin.Renewal
                 command.ExecuteNonQuery();
 
                 string renewals_email_name = string.Empty;
-	          
+
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
                 while (myReader.Read())
                 {
                     renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
-		            renewals_invoices_email_name = myReader["renewals_invoices_email_name"].ToString();
-		            customers_id = Convert.ToInt32(myReader["customers_id"]);
-		            orders_id = Convert.ToInt32(myReader["orders_id"]);
-		            renewals_billing_series_id = Convert.ToInt32(myReader["renewals_billing_series_id"]);
-		            accepted_for_delivery = false;
-		            products_id = Convert.ToInt32(myReader["products_id"]);
-		            skus_id = Convert.ToInt32(myReader["skus_id"]);
-		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		            prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-		            renewal_order_status =Convert.ToInt32(myReader["orders_status"]);
-		            skus_status = Convert.ToInt32(myReader["skus_status"]);
-		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-		            auto_renew = Convert.ToInt32(myReader["auto_renew"]);
-		            is_gift = Convert.ToInt32(myReader["is_gift"].ToString());
-		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
-		            is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
+                    renewals_invoices_email_name = myReader["renewals_invoices_email_name"].ToString();
+                    customers_id = Convert.ToInt32(myReader["customers_id"]);
+                    orders_id = Convert.ToInt32(myReader["orders_id"]);
+                    renewals_billing_series_id = Convert.ToInt32(myReader["renewals_billing_series_id"]);
+                    accepted_for_delivery = false;
+                    products_id = Convert.ToInt32(myReader["products_id"]);
+                    skus_id = Convert.ToInt32(myReader["skus_id"]);
+                    skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                    prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+                    renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
+                    skus_status = Convert.ToInt32(myReader["skus_status"]);
+                    continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+                    auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    is_gift = Convert.ToInt32(myReader["is_gift"].ToString());
+                    skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
+                    is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
                 }
 
                 myReader.Close();
@@ -1097,9 +1178,9 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-              
+
                 // Go through only pending orders, which haven"t been sent yet and are in progress
-	            string renewal_invoices_info_query_string = @"select *
+                string renewal_invoices_info_query_string = @"select *
 												from renewals_invoices ri,
 													 orders o,
 													 orders_products op,
@@ -1121,7 +1202,7 @@ namespace BlueDolphin.Renewal
  												and rbs.renewals_invoices_type = 'PAPER'";
 
                 // Set our number of processed paper invoices to its default value of zero.
-	            int number_of_renewal_paper_invoices_file_records = 0;
+                int number_of_renewal_paper_invoices_file_records = 0;
 
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = renewal_invoices_info_query_string;
@@ -1132,42 +1213,42 @@ namespace BlueDolphin.Renewal
                 while (myReader.Read())
                 {
                     // Pull data form our current renewal invoice.
-		            billing_first_name = myReader["billing_first_name"].ToString();
-		            billing_last_name = myReader["billing_last_name"].ToString();
-		            billing_address_line_1 = myReader["billing_street_address"].ToString();
-		            billing_city = myReader["billing_city"].ToString();
-		            billing_state = myReader["billing_state"].ToString();
-		            billing_postal_code = myReader["billing_postcode"].ToString();
-		            delivery_first_name = myReader["delivery_first_name"].ToString();
-		            delivery_last_name = myReader["delivery_last_name"].ToString();
-		            delivery_address_line_1 = myReader["delivery_street_address"].ToString();
-		            delivery_city = myReader["delivery_city"].ToString();
-		            delivery_state = myReader["delivery_state"].ToString();
-		            delivery_postal_code = myReader["delivery_postcode"].ToString();
-		            renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
-		            customers_id = Convert.ToInt32(myReader["customers_id"]);
-		            orders_id = Convert.ToInt32(myReader["orders_id"]);
-		            renewals_billing_series_code = myReader["renewals_billing_series_code"].ToString();
-		            products_id = Convert.ToInt32(myReader["products_id"]);
-		            skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-		            prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-		            renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
-		            skus_status = Convert.ToInt32(myReader["skus_status"]);
-		            products_name = myReader["products_name"].ToString();
-		            skus_term = Convert.ToInt32(myReader["skus_term"]);
-		            effort_number = Convert.ToInt32(myReader["effort_number"]);
-		            date_purchased = Convert.ToDateTime(myReader["date_purchased"]);
-		            amount_owed = Convert.ToDouble(myReader["amount_owed"]);
-		            amount_paid = Convert.ToDouble(myReader["amount_paid"]);
-		            price = Convert.ToDouble(myReader["products_price"]);
-		            email_address = myReader["customers_email_address"].ToString();
-		            continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-		            auto_renew = Convert.ToInt32(myReader["auto_renew"]);
-		            cc_number_display = myReader["cc_number_display"].ToString();
-		            template_directory = myReader["tplDir"].ToString();
-		            skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
+                    billing_first_name = myReader["billing_first_name"].ToString();
+                    billing_last_name = myReader["billing_last_name"].ToString();
+                    billing_address_line_1 = myReader["billing_street_address"].ToString();
+                    billing_city = myReader["billing_city"].ToString();
+                    billing_state = myReader["billing_state"].ToString();
+                    billing_postal_code = myReader["billing_postcode"].ToString();
+                    delivery_first_name = myReader["delivery_first_name"].ToString();
+                    delivery_last_name = myReader["delivery_last_name"].ToString();
+                    delivery_address_line_1 = myReader["delivery_street_address"].ToString();
+                    delivery_city = myReader["delivery_city"].ToString();
+                    delivery_state = myReader["delivery_state"].ToString();
+                    delivery_postal_code = myReader["delivery_postcode"].ToString();
+                    renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
+                    customers_id = Convert.ToInt32(myReader["customers_id"]);
+                    orders_id = Convert.ToInt32(myReader["orders_id"]);
+                    renewals_billing_series_code = myReader["renewals_billing_series_code"].ToString();
+                    products_id = Convert.ToInt32(myReader["products_id"]);
+                    skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                    prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+                    renewal_order_status = Convert.ToInt32(myReader["orders_status"]);
+                    skus_status = Convert.ToInt32(myReader["skus_status"]);
+                    products_name = myReader["products_name"].ToString();
+                    skus_term = Convert.ToInt32(myReader["skus_term"]);
+                    effort_number = Convert.ToInt32(myReader["effort_number"]);
+                    date_purchased = Convert.ToDateTime(myReader["date_purchased"]);
+                    amount_owed = Convert.ToDouble(myReader["amount_owed"]);
+                    amount_paid = Convert.ToDouble(myReader["amount_paid"]);
+                    price = Convert.ToDouble(myReader["products_price"]);
+                    email_address = myReader["customers_email_address"].ToString();
+                    continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+                    auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    cc_number_display = myReader["cc_number_display"].ToString();
+                    template_directory = myReader["tplDir"].ToString();
+                    skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
 
-	/*	// Check to make sure we can still process this paper invoice.
+                    /*	// Check to make sure we can still process this paper invoice.
 		// If not print why and stop processing renewal invoice.
 		$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
 		if ($check_renewal_order_result !== true) {
@@ -1225,7 +1306,7 @@ namespace BlueDolphin.Renewal
                 int renewals_invoices_id;
 
                 //LOOP THROUHG ALL INVOICES WHERE IN_PROGRESS IS 0.
-                command = new MySqlCommand(string.Empty,myConn);
+                command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "select * from renewals_invoices ri where ri.in_progress=0";
                 command.ExecuteNonQuery();
 
@@ -1237,15 +1318,21 @@ namespace BlueDolphin.Renewal
                     Console.WriteLine(myReader["renewals_invoices_id"]);
                     renewals_invoices_id = Convert.ToInt32(myReader["renewals_invoices_id"]);
 
-                     //move the invoice to history.
-		             //we use replace. If the server goes down right between these 2 stmts then the next time
-		             //it will still work.
-		             command2 = new MySqlCommand("replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = '" + renewals_invoices_id.ToString()+"'", myConn);
-                     command2.ExecuteNonQuery();
-                     //remove old one
-                     command3 = new MySqlCommand("delete from renewals_invoices where renewals_invoices_id = '" + renewals_invoices_id.ToString()+"'", myConn);
-                     command3.ExecuteNonQuery();
-                    
+                    //move the invoice to history.
+                    //we use replace. If the server goes down right between these 2 stmts then the next time
+                    //it will still work.
+                    command2 =
+                        new MySqlCommand(
+                            "replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = '" +
+                            renewals_invoices_id.ToString() + "'", myConn);
+                    command2.ExecuteNonQuery();
+                    //remove old one
+                    command3 =
+                        new MySqlCommand(
+                            "delete from renewals_invoices where renewals_invoices_id = '" +
+                            renewals_invoices_id.ToString() + "'", myConn);
+                    command3.ExecuteNonQuery();
+
                     number_of_renewal_invoices_cleaned_up++;
                 }
 
@@ -1304,7 +1391,7 @@ namespace BlueDolphin.Renewal
             {
                 if (orders_id.ToString() == string.Empty)
                 {
-                    
+
 
                 }
 
@@ -1317,12 +1404,12 @@ namespace BlueDolphin.Renewal
 			            s.skus_type,
 			            o.is_postcard_confirmation
 		            from " +
-			            TABLE_ORDERS + @" o, " +
-			            TABLE_FULFILLMENT_BATCH_ITEMS + @" fbi, " +
-			            TABLE_FULFILLMENT_BATCH + @" fb, " +
-			            TABLE_ORDERS_PRODUCTS + @" op, " +
-			            TABLE_SKUS + @" s, " +
-			            TABLE_PRODUCTS + @" p
+                                      TABLE_ORDERS + @" o, " +
+                                      TABLE_FULFILLMENT_BATCH_ITEMS + @" fbi, " +
+                                      TABLE_FULFILLMENT_BATCH + @" fb, " +
+                                      TABLE_ORDERS_PRODUCTS + @" op, " +
+                                      TABLE_SKUS + @" s, " +
+                                      TABLE_PRODUCTS + @" p
 		            where
 			            o.orders_id = op.orders_id
 			            and o.orders_id = fbi.orders_id
@@ -1335,14 +1422,14 @@ namespace BlueDolphin.Renewal
 		            limit 1";
 
                 command.ExecuteNonQuery();
-               
+
                 return DateTime.Now;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return DateTime.Now;
-                
+
             }
         }
 
@@ -1388,45 +1475,57 @@ namespace BlueDolphin.Renewal
                 }
 
                 //make sure this renewal order product's continuous service is still active and this renewal orders
-	            //auto renew hasn't been changed.
-	            if (continuous_service != 1) {
+                //auto renew hasn't been changed.
+                if (continuous_service != 1)
+                {
 
-		            check_renewal_order_result = "Continuous Service for products_id " + products_id.ToString() + " is not 1.";
-	            }
+                    check_renewal_order_result = "Continuous Service for products_id " + products_id.ToString() +
+                                                 " is not 1.";
+                }
 
-	            if (renewal_order_auto_renew != 1) {
-		            check_renewal_order_result = "Auto Renew for this order is not 1.";
-	            }
-	            if (renewal_order_status != 1) {
-		            check_renewal_order_result = "This orders status is " + renewal_order_status.ToString() + ". Only Pending orders are valid.";
-	            }
+                if (renewal_order_auto_renew != 1)
+                {
+                    check_renewal_order_result = "Auto Renew for this order is not 1.";
+                }
+                if (renewal_order_status != 1)
+                {
+                    check_renewal_order_result = "This orders status is " + renewal_order_status.ToString() +
+                                                 ". Only Pending orders are valid.";
+                }
 
 
                 // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
-	            if (prior_orders_id.ToString() != "") {
-		        
-                     command = new MySqlCommand("select * from orders where orders_id = '" + prior_orders_id.ToString()+"'", myConn);
-                     command.ExecuteNonQuery();
-                     MySqlDataReader myReader;
-                     myReader = command.ExecuteReader();
+                if (prior_orders_id.ToString() != "")
+                {
 
-	                    while (myReader.Read())
-	                    {
-	                    
-                         prior_order_status =  Convert.ToInt32(myReader["orders_status"]);
-                         prior_order_auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    command =
+                        new MySqlCommand("select * from orders where orders_id = '" + prior_orders_id.ToString() + "'",
+                            myConn);
+                    command.ExecuteNonQuery();
+                    MySqlDataReader myReader;
+                    myReader = command.ExecuteReader();
 
-	                    }
+                    while (myReader.Read())
+                    {
 
-		            //if the original order isn't a Paid order (cancelled or disputed) go on to the next order.
-		            //if the original order's auto-renew (user action) was changed move on the next order.
-		            if (prior_order_status != 2) {
-			            check_renewal_order_result = "The original order (orders_id: " + prior_orders_id.ToString() + ") is no longer Paid.";
-		            }
-		            if (prior_order_auto_renew == 0) {
-			            check_renewal_order_result = "The auto renew for the original order (orders_id: " + prior_orders_id.ToString() + ") is not 1.";
-		            }
-	            }
+                        prior_order_status = Convert.ToInt32(myReader["orders_status"]);
+                        prior_order_auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+
+                    }
+
+                    //if the original order isn't a Paid order (cancelled or disputed) go on to the next order.
+                    //if the original order's auto-renew (user action) was changed move on the next order.
+                    if (prior_order_status != 2)
+                    {
+                        check_renewal_order_result = "The original order (orders_id: " + prior_orders_id.ToString() +
+                                                     ") is no longer Paid.";
+                    }
+                    if (prior_order_auto_renew == 0)
+                    {
+                        check_renewal_order_result = "The auto renew for the original order (orders_id: " +
+                                                     prior_orders_id.ToString() + ") is not 1.";
+                    }
+                }
 
                 return check_renewal_order_result;
             }
@@ -1440,14 +1539,15 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static int create_renewal_order(int order, int renewals_billing_series_id, bool is_perfect_renewal, int renewal_sku, int is_postcard_confirmation)
+        private static int create_renewal_order(Dictionary<string, object> order, int renewals_billing_series_id, bool is_perfect_renewal,
+            Dictionary<string, object> renewal_sku, int is_postcard_confirmation)
         {
             try
             {
                 int renewal_orders_id = 0;
 
 
-                                                 /*   $renewal_order = array();
+                /*   $renewal_order = array();
 	                                    $renewal_order_product = array();
 
 	                                    //get the columns array for neccessary tables.
@@ -1631,8 +1731,8 @@ namespace BlueDolphin.Renewal
             try
             {
 
-                            //countries table, for each country name give us the country code.
-	            /*$countries_query = tep_db_query("select * from countries");
+                //countries table, for each country name give us the country code.
+                /*$countries_query = tep_db_query("select * from countries");
 
 	            while ($countries_array = tep_db_fetch_array($countries_query)) {
 		            $all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];*/
@@ -1646,18 +1746,18 @@ namespace BlueDolphin.Renewal
 
                 while (myReader.Read())
                 {
-                   
+
                 }
 
                 myReader.Close();
-	
 
-                
+
+
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-                
+
             }
 
         }
@@ -1669,7 +1769,9 @@ namespace BlueDolphin.Renewal
             {
 
                 command = new MySqlCommand(string.Empty, myConn);
-                command.CommandText = "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action +", " + orders_id.ToString()+")";
+                command.CommandText =
+                    "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " +
+                    orders_id.ToString() + ")";
                 command.ExecuteNonQuery();
 
 
@@ -1688,7 +1790,9 @@ namespace BlueDolphin.Renewal
             {
 
                 command = new MySqlCommand(string.Empty, myConn);
-                command.CommandText = "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " + string.Empty+")";
+                command.CommandText =
+                    "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " +
+                    string.Empty + ")";
                 command.ExecuteNonQuery();
 
 
@@ -1700,7 +1804,8 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static void create_fulfillment_batch_item(int orders_id, int fulfillment_status_id, string orders_previous_status = "" )
+        private static void create_fulfillment_batch_item(int orders_id, int fulfillment_status_id,
+            string orders_previous_status = "")
         {
             try
             {
@@ -1717,11 +1822,11 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-                
+
             }
         }
 
-                                /*  private static int get_fulfillment_batch_id($products_id, $fulfillment_status_id, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period) {
+        /*  private static int get_fulfillment_batch_id($products_id, $fulfillment_status_id, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period) {
 
                               //Because of potential transactional problems, we can't just do a search and then an insert, because
                               //another thread might have inserted in between our select and insert. Locking won't work either because
@@ -1815,28 +1920,29 @@ namespace BlueDolphin.Renewal
 
         private static bool isPerfectRenewal(Dictionary<string, object> order)
         {
-            /*if ($order['cc_number'] == '' || $order['cc_expires'] == '') {
-		if ($order['renewal_cc_number'] == '' || $order['renewal_cc_expires'] == '') {
-			return false;
-		}
-	}
-*/
             try
             {
+                if (order["cc_number"].ToString() == string.Empty || order["cc_expires"].ToString() == string.Empty)
+                {
 
+                    if (order["renewal_cc_number"].ToString() == string.Empty ||
+                        order["renewal_cc_expires"].ToString() == string.Empty)
+                    {
+                        return false;
+                    }
+                }
 
                 return true;
             }
 
             catch (Exception e)
             {
-                
+
                 Console.WriteLine(e.Message);
                 return false;
             }
-            
-        }
 
+        }
 
     }
 
