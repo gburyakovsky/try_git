@@ -94,26 +94,26 @@ namespace BlueDolphin.Renewal
         public static string TABLE_ORDERS_FULFILLMENT_BATCH_HISTORY = "orders_fulfillment_batch_history";
 
 
-        public bool USE_PCONNECT = false; // use persistent connections?
-        public string DEFAULT_PENDING_COMMENT = "Renewal Order has been created.";
-        public string CHARSET = "iso-8859-1";
-        public string FULFILLMENT_FULFILL_ID = "1";
-        public string FULFILLMENT_CHANGE_ADDRESS_ID = "2";
+        public static bool USE_PCONNECT = false; // use persistent connections?
+        public static string DEFAULT_PENDING_COMMENT = "Renewal Order has been created.";
+        public static string CHARSET = "iso-8859-1";
+        public static string FULFILLMENT_FULFILL_ID = "1";
+        public static string FULFILLMENT_CHANGE_ADDRESS_ID = "2";
 
-        public string FULFILLMENT_CANCEL_ID = "3";
-        public string FULFILLMENT_IGNORE_FULFILLMENT_ID = "4";
-        public string PAPER_INVOICE_DATE_FORMAT = "Ymd_His";
-        public string DEFAULT_COUNTRY_ID = "223";
-        public string MODULE_PAYMENT_PAYFLOWPRO_TEXT_ERROR = "Credit Card Error!";
-        public string DATE_FORMAT_DB = "%Y-%m-%d %H:%M:%S";
-        public string FILENAME_PRODUCT_INFO = "product_info.php";
+        public static string FULFILLMENT_CANCEL_ID = "3";
+        public static string FULFILLMENT_IGNORE_FULFILLMENT_ID = "4";
+        public static string PAPER_INVOICE_DATE_FORMAT = "Ymd_His";
+        public static string DEFAULT_COUNTRY_ID = "223";
+        public static string MODULE_PAYMENT_PAYFLOWPRO_TEXT_ERROR = "Credit Card Error!";
+        public static string DATE_FORMAT_DB = "%Y-%m-%d %H:%M:%S";
+        public static string FILENAME_PRODUCT_INFO = "product_info.php";
 
         //the following are defined in renewal_track_emails table.
-        public string TRACK1 = "1014";
-        public string TRACK2_BAD_CC = "1015";
-        public string TRACK2_CHECK = "1016";
-        public string TRACK2_MC = "1,.017";
-        public string TRACK2_PC = "1018";
+        public static string TRACK1 = "1014";
+        public static string TRACK2_BAD_CC = "1015";
+        public static string TRACK2_CHECK = "1016";
+        public static string TRACK2_MC = "1,.017";
+        public static string TRACK2_PC = "1018";
 
         public static int number_of_renewal_orders_created;
         public static int number_of_renewal_orders_charged;
@@ -206,8 +206,11 @@ namespace BlueDolphin.Renewal
         private static string products_billing_descriptor;
         private static string cc_expires_year;
         private static string cc_expires_month;
+        private static bool is_perfect_renewal;
 
         private static List<string> all_countries_array = new List<string>();
+        private static Dictionary<string, object> orders_array;
+
         /// <summary>
         /// 
         /// </summary>
@@ -372,6 +375,7 @@ namespace BlueDolphin.Renewal
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
+
                 if(Debug)
                     Console.WriteLine("number of orders to be examined: " +  Convert.ToInt32(command.ExecuteScalar()).ToString() + "\n");
 
@@ -387,8 +391,8 @@ namespace BlueDolphin.Renewal
 		            // Is it a postcard confirmation?
 		           original_is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
 
-		//if the original sku was an intro sku then use the 1st RENEW sku type_order_period for the same
-		//skus_type_order
+		            //if the original sku was an intro sku then use the 1st RENEW sku type_order_period for the same
+		            //skus_type_order
 
                     if (original_order_skus_type.ToString() == "INTRO")
                     {
@@ -513,13 +517,14 @@ namespace BlueDolphin.Renewal
                         }
 
                         noSku.Close();
+                        continue;
 
                     } // END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH
 
                     Dictionary<string, object> renewal_sku = new Dictionary<string, object>();
-                    
+                    renewal_sku = null;
+
                     // Potential Renewal SKUs found: now find the right one
-                  
                     while (myReader2.Read())
                     {
                         //since we go descending through the type orders year, we can look first for the renewal type order year,
@@ -577,26 +582,66 @@ namespace BlueDolphin.Renewal
                         //debug($renewal_sku, 'renewal_sku');
                     }
 
-                                //at this point we know there isn't any valid renewal sku, so move on to the next order.
-		            if (sizeof($renewal_sku) == 0) {
+                    //at this point we know there isn't any valid renewal sku, so move on to the next order.
+                    if (renewal_sku.Count == 0 || renewal_sku == null)
+                    {
 
-			            //restored error_description
-		                string update_sql = "update " + TABLE_ORDERS +
-		                                    " set renewal_error='1', renewal_error_description='Error: renewal sku with proper sku type order period (1 to " +
-		                                    renewal_skus_type_order_period +
-		                                    ") does not exist for this order' where orders_id='" +
-		                                    original_order_id.ToString() + "'";
-			            
+                        //restored error_description
+                        string update_sql = "update " + TABLE_ORDERS +
+                                            " set renewal_error='1', renewal_error_description='Error: renewal sku with proper sku type order period (1 to " +
+                                            renewal_skus_type_order_period +
+                                            ") does not exist for this order' where orders_id='" +
+                                            original_order_id.ToString() + "'";
+
                         command3 = new MySqlCommand(update_sql, myConn);
-		                command3.ExecuteNonQuery();
+                        command3.ExecuteNonQuery();
 
-			            if (Debug)
+                        if (Debug)
                             Console.WriteLine("no renewal sku found\n");
 
-			            continue;
-		            }
+                        continue;
+
+                    }
 
                     myReader2.Close();
+
+                    //now that we have a valid sku lets put the order in the right track.
+                    is_perfect_renewal = false;
+                    orders_array = new Dictionary<string, object>();
+
+                    for (int oa = 0; oa < myReader.FieldCount; oa++)
+                    {
+                        orders_array.Add(myReader.GetName(oa), myReader.GetValue(oa));
+                    }
+
+                    if (isPerfectRenewal(orders_array))
+                    {
+                        renewals_billing_series_id = Convert.ToInt32(TRACK1);
+			            is_perfect_renewal = true;
+                    }
+                    else
+                    {
+
+                        if (orders_array["cc_number"].ToString() == string.Empty && orders_array["renewal_cc_number"].ToString() == string.Empty)
+                        {
+                            renewals_billing_series_id = Convert.ToInt32(TRACK2_CHECK);
+                        }
+                        else if (orders_array["is_postcard_confirmation"].ToString() == "1")
+                        {
+                            renewals_billing_series_id = Convert.ToInt32(TRACK2_PC);
+                        }
+                        else
+                        {
+                            renewals_billing_series_id = Convert.ToInt32(TRACK2_BAD_CC);
+                        }
+
+                    }
+
+                    if(Debug)
+                        Console.WriteLine("Perfect Renewal: " + is_perfect_renewal.ToString() + "; track chosen: " + renewals_billing_series_id.ToString() + "\n");
+                    
+                    //create the order and if succeeded, we will update the original order with renewal info and also so it won't be pulled again for renewals.
+                
                 }
 
                 myReader.Close();
@@ -1395,7 +1440,7 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static int create_renewal_order(int order, int renewals_billing_series_id, int is_perfect_renewal, int renewal_sku, int is_postcard_confirmation)
+        private static int create_renewal_order(int order, int renewals_billing_series_id, bool is_perfect_renewal, int renewal_sku, int is_postcard_confirmation)
         {
             try
             {
@@ -1767,5 +1812,32 @@ namespace BlueDolphin.Renewal
                         }
                           
                                  */
+
+        private static bool isPerfectRenewal(Dictionary<string, object> order)
+        {
+            /*if ($order['cc_number'] == '' || $order['cc_expires'] == '') {
+		if ($order['renewal_cc_number'] == '' || $order['renewal_cc_expires'] == '') {
+			return false;
+		}
+	}
+*/
+            try
+            {
+
+
+                return true;
+            }
+
+            catch (Exception e)
+            {
+                
+                Console.WriteLine(e.Message);
+                return false;
+            }
+            
+        }
+
+
     }
+
 }
