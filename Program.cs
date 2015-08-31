@@ -1799,13 +1799,13 @@ namespace BlueDolphin.Renewal
 
                 while (myReader3.Read())
                 {
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["title"]);
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["symbol_left"]);
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["symbol_right"]);
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["decimal_point"]);
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["thousands_point"]);
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["decimal_places"]);
-                    currencies[i].Add(myReader3["code"].ToString(), myReader3["value"]);
+                    currencies[i].Add("title", myReader3["title"]);
+                    currencies[i].Add("symbol_left", myReader3["symbol_left"]);
+                    currencies[i].Add("symbol_right", myReader3["symbol_right"]);
+                    currencies[i].Add("decimal_point", myReader3["decimal_point"]);
+                    currencies[i].Add("thousands_point", myReader3["thousands_point"]);
+                    currencies[i].Add("decimal_places", myReader3["decimal_places"]);
+                    currencies[i].Add("value", myReader3["value"]);
                     i++;
 
                 }
