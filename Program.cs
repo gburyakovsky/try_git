@@ -215,6 +215,8 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
         private static Dictionary<string, object> zones;
+        private static Dictionary<string, object>[] currencies;
+        private static Dictionary<string, object> configuration;
 
         /// <summary>
         /// 
@@ -1746,10 +1748,7 @@ namespace BlueDolphin.Renewal
             {
 
                 //countries table, for each country name give us the country code.
-                /*$countries_query = tep_db_query("select * from countries");
-
-	            while ($countries_array = tep_db_fetch_array($countries_query)) {
-		            $all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];*/
+              
 
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "select * from countries";
@@ -1759,6 +1758,9 @@ namespace BlueDolphin.Renewal
                 myReader = command.ExecuteReader();
 
                 countries = new Dictionary<string, object>();
+                zones = new Dictionary<string, object>();
+                configuration = new Dictionary<string, object>();
+                
 
                 while (myReader.Read())
                 {
@@ -1769,38 +1771,64 @@ namespace BlueDolphin.Renewal
                 myReader.Close();
 
                 //state names are used in order, for paper invoices we need to look up abbreviation for these state names
-               
                 command2 = new MySqlCommand(string.Empty, myConn);
                 command2.CommandText = "select * from zones";
                 command2.ExecuteNonQuery();
 
                 MySqlDataReader myReader2;
                 myReader2 = command2.ExecuteReader();
-
+              
                 while (myReader2.Read())
                 {
                     zones.Add(myReader["zone_name"].ToString(), myReader["zone_code"]);
-
+                  
                 }
 
                 myReader2.Close();
 
                 //currencies
-
                 command3 = new MySqlCommand(string.Empty, myConn);
                 command3.CommandText = "select code, title, symbol_left, symbol_right, decimal_point, thousands_point, decimal_places, value from currencies";
                 command3.ExecuteNonQuery();
 
                 MySqlDataReader myReader3;
                 myReader3 = command3.ExecuteReader();
+                int num_records = Convert.ToInt32(command3.ExecuteScalar());
+                currencies[num_records] = new Dictionary<string, object>();
+                int i = 0;
 
                 while (myReader3.Read())
                 {
-                    zones.Add(myReader["zone_name"].ToString(), myReader["zone_code"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["title"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["symbol_left"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["symbol_right"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["decimal_point"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["thousands_point"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["decimal_places"]);
+                    currencies[i].Add(myReader3["code"].ToString(), myReader3["value"]);
+                    i++;
 
                 }
 
                 myReader3.Close();
+
+                //configuration table
+
+                command4 = new MySqlCommand(string.Empty, myConn);
+                command4.CommandText = "select * from configuration";
+                command4.ExecuteNonQuery();
+
+                MySqlDataReader myReader4;
+                myReader4 = command4.ExecuteReader();
+
+
+                while (myReader4.Read())
+                {
+                    configuration.Add(myReader4["configuration_key"].ToString(), myReader4["configuration_value"]);
+
+                }
+
+                myReader4.Close();
 
 
             }
