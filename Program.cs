@@ -213,6 +213,8 @@ namespace BlueDolphin.Renewal
 
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
+        private static Dictionary<string, object> countries;
+        private static Dictionary<string, object> zones;
 
         /// <summary>
         /// 
@@ -1546,6 +1548,18 @@ namespace BlueDolphin.Renewal
             {
                 int renewal_orders_id = 0;
 
+                Dictionary<string, object> renewal_order = new Dictionary<string, object>();
+                Dictionary<string, object> renewal_order_product = new Dictionary<string, object>();
+
+
+
+                //creates the parent order number.
+                //and set it on the new order.
+
+                command  = new MySqlCommand("insert into orders_groups (orders_groups_id) VALUES ('')", myConn);
+                command.ExecuteNonQuery();
+
+                int renewal_orders_groups_id = tep_db_insert_id();
 
                 /*   $renewal_order = array();
 	                                    $renewal_order_product = array();
@@ -1744,13 +1758,49 @@ namespace BlueDolphin.Renewal
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
+                countries = new Dictionary<string, object>();
+
                 while (myReader.Read())
                 {
-
+                    countries.Add(myReader["countries_name"].ToString(), myReader["countries_iso_code_3"]);
+                    
                 }
 
                 myReader.Close();
 
+                //state names are used in order, for paper invoices we need to look up abbreviation for these state names
+               
+                command2 = new MySqlCommand(string.Empty, myConn);
+                command2.CommandText = "select * from zones";
+                command2.ExecuteNonQuery();
+
+                MySqlDataReader myReader2;
+                myReader2 = command2.ExecuteReader();
+
+                while (myReader2.Read())
+                {
+                    zones.Add(myReader["zone_name"].ToString(), myReader["zone_code"]);
+
+                }
+
+                myReader2.Close();
+
+                //currencies
+
+                command3 = new MySqlCommand(string.Empty, myConn);
+                command3.CommandText = "select code, title, symbol_left, symbol_right, decimal_point, thousands_point, decimal_places, value from currencies";
+                command3.ExecuteNonQuery();
+
+                MySqlDataReader myReader3;
+                myReader3 = command3.ExecuteReader();
+
+                while (myReader3.Read())
+                {
+                    zones.Add(myReader["zone_name"].ToString(), myReader["zone_code"]);
+
+                }
+
+                myReader3.Close();
 
 
             }
@@ -1942,6 +1992,22 @@ namespace BlueDolphin.Renewal
                 return false;
             }
 
+        }
+
+        private static int tep_db_insert_id()
+        {
+            try
+            {
+
+                return 1;
+
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return 0;
+            }
         }
 
     }
