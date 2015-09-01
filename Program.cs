@@ -1582,11 +1582,24 @@ namespace BlueDolphin.Renewal
             try
             {
                 int renewal_orders_id = 0;
-
+                
                 Dictionary<string, object> renewal_order = new Dictionary<string, object>();
                 Dictionary<string, object> renewal_order_product = new Dictionary<string, object>();
 
+                int n = orders_columns.Count;
+                string column_name = string.Empty;
 
+                //now loop through each and create an array for each table with data from $order.
+	            //this allows us to just override the columns we want and have the rest automatically
+	            //copied over.
+
+                for (int i = 0; i < n; i++)
+                {
+                    column_name = orders_columns[i].ToString();
+                    renewal_order.Add(column_name, order[column_name]);
+                    //renewal_order[column_name] = order[column_name];
+                    //  $renewal_order[$column_name] = $order[$column_name];
+                }
 
                 //creates the parent order number.
                 //and set it on the new order.
