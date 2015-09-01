@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -215,12 +216,16 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
         private static Dictionary<string, object> zones;
-        private static Dictionary<object, object>[] currencies;
+        //private static Dictionary<string, object> currencies;
         private static Dictionary<object, object> configuration;
         private static List<string> orders_columns;
         private static List<string> orders_products_columns;
-        private static Dictionary<string, object>[] renewels_billing_series_array;
-        private static Dictionary<string, object>[] skinsites;
+        //private static Dictionary<string, object> renewels_billing_series_array;
+        //private static Dictionary<string, object> skinsites;
+        private static DataTable renewels_billing_series_array;
+        private static DataTable skinsites;
+        private static DataTable skinsites_configuration_defines;
+        private static DataTable currencies;
 
         /// <summary>
         /// 
@@ -417,6 +422,9 @@ namespace BlueDolphin.Renewal
                     num_orders++;
                 }
 
+                myReader.Close();
+                myReader = command.ExecuteReader();
+
                 if (Debug)
                     Console.WriteLine("number of orders to be examined: " +
                                       num_orders.ToString() + "\n");
@@ -497,6 +505,9 @@ namespace BlueDolphin.Renewal
                         num_skus++;
 
                     }
+
+                    myReader2.Close();
+                    myReader2 = command2.ExecuteReader();
 
                     if (Debug)
                         Console.Write("number of renewal skus for product : " + original_order_products_id.ToString() +
@@ -601,7 +612,7 @@ namespace BlueDolphin.Renewal
                     {
                         //since we go descending through the type orders year, we can look first for the renewal type order year,
                         //then the original type order year, and if that doesn't exist, keep going until we find one.
-                        //if $renewal_sku isn't populated at the end of this loop, it means we don't have any skus
+                        //if renewal_sku isn't populated at the end of this loop, it means we don't have any skus
                         //for renewal.
 
                         //First check for the next renewal Sku.
@@ -745,6 +756,9 @@ namespace BlueDolphin.Renewal
                         Console.WriteLine("\n\n");
 
                     number_of_renew_invoices_prepared++;
+
+                    renewal_sku.Clear();
+                    orders_array.Clear();
                 }
 
                 myReader.Close();
@@ -1809,7 +1823,15 @@ namespace BlueDolphin.Renewal
                 command3.CommandText = "select code, title, symbol_left, symbol_right, decimal_point, thousands_point, decimal_places, value from currencies";
                 command3.ExecuteNonQuery();
 
-                MySqlDataReader myReader3;
+                currencies = new DataTable();
+
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command7))
+                {
+                    da.Fill(currencies);
+
+                }
+
+               /* MySqlDataReader myReader3;
                 myReader3 = command3.ExecuteReader();
                 int num_records = 0; //Convert.ToInt32(command3.ExecuteScalar());
 
@@ -1818,24 +1840,26 @@ namespace BlueDolphin.Renewal
                     num_records++;
                 }
 
-                currencies[num_records] = new Dictionary<object, object>();
+                myReader3.Close();
+                myReader3 = command3.ExecuteReader();
+
+                currencies = new Dictionary<string, object>();
                 int i = 0;
 
                 while (myReader3.Read())
                 {
-                    currencies[i].Add(myReader3["code"], myReader3["title"]);
-                    currencies[i].Add(myReader3["code"], myReader3["symbol_left"]);
-                    currencies[i].Add(myReader3["code"], myReader3["symbol_right"]);
-                    currencies[i].Add(myReader3["code"], myReader3["decimal_point"]);
-                    currencies[i].Add(myReader3["code"], myReader3["thousands_point"]);
-                    currencies[i].Add(myReader3["code"], myReader3["decimal_places"]);
-                    currencies[i].Add(myReader3["code"], myReader3["value"]);
-                    i++;
-                    
-
+                    currencies.Add("code", myReader3["code"]);
+                    currencies.Add("title", myReader3["title"]);
+                    currencies.Add("symbol_left", myReader3["symbol_left"]);
+                    currencies.Add("symbol_right", myReader3["symbol_right"]);
+                    currencies.Add("decimal_point", myReader3["decimal_point"]);
+                    currencies.Add("thousands_point", myReader3["thousands_point"]);
+                    currencies.Add("decimal_places", myReader3["decimal_places"]);
+                    currencies.Add("value", myReader3["value"]);
+                 
                 }
 
-                myReader3.Close();
+                myReader3.Close(); */
 
                 //configuration table
 
@@ -1882,7 +1906,6 @@ namespace BlueDolphin.Renewal
                 MySqlDataReader myReader6;
                 myReader6 = command6.ExecuteReader();
 
-
                 while (myReader6.Read())
                 {
                     orders_products_columns.Add(myReader6["field"].ToString());
@@ -1892,7 +1915,6 @@ namespace BlueDolphin.Renewal
                 myReader6.Close();
 
                 //renewal billing series info.
-
                 command7 = new MySqlCommand(string.Empty, myConn);
                 command7.CommandText = @"select
 			        renewals_billing_series_id,
@@ -1903,9 +1925,17 @@ namespace BlueDolphin.Renewal
 			        renewals_invoices_email_name
 		        from
 			        renewals_billing_series";
+
                 command7.ExecuteNonQuery();
+                renewels_billing_series_array = new DataTable();
+
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command7))
+                {
+                    da.Fill(renewels_billing_series_array);
+
+                }
                
-                MySqlDataReader myReader7;
+             /*   MySqlDataReader myReader7;
                 myReader7 = command7.ExecuteReader();
                 int num_records2 = 0; //Convert.ToInt32(command7.ExecuteScalar());
 
@@ -1913,30 +1943,33 @@ namespace BlueDolphin.Renewal
                 {
                     num_records2++;
                 }
+                
+                myReader7.Close();
+                myReader7 = command7.ExecuteReader();
 
-                renewels_billing_series_array[num_records2] = new Dictionary<string, object>();
+                renewels_billing_series_array = new Dictionary<string, object>();
 
                 int j = 0;
 
                 while (myReader7.Read())
                 {
-                    renewels_billing_series_array[j].Add("renewals_billing_series_id", myReader7["renewals_billing_series_id"]);
-                    renewels_billing_series_array[j].Add("effort_number", myReader7["effort_number"]);
-                    renewels_billing_series_array[j].Add("delay_in_days", myReader7["delay_in_days"]);
-                    renewels_billing_series_array[j].Add("renewals_billing_series_name", myReader7["renewals_billing_series_name"]);
-                    renewels_billing_series_array[j].Add("renewals_invoices_type", myReader7["renewals_invoices_type"]);
-                    renewels_billing_series_array[j].Add("renewals_invoices_email_name", myReader7["renewals_invoices_email_name"]);
+                    renewels_billing_series_array.Add("renewals_billing_series_id", myReader7["renewals_billing_series_id"]);
+                    renewels_billing_series_array.Add("effort_number", myReader7["effort_number"]);
+                    renewels_billing_series_array.Add("delay_in_days", myReader7["delay_in_days"]);
+                    renewels_billing_series_array.Add("renewals_billing_series_name", myReader7["renewals_billing_series_name"]);
+                    renewels_billing_series_array.Add("renewals_invoices_type", myReader7["renewals_invoices_type"]);
+                    renewels_billing_series_array.Add("renewals_invoices_email_name", myReader7["renewals_invoices_email_name"]);
                     j++;
 
                 }
 
-                myReader7.Close();
+                myReader7.Close(); */
 
                 command8 = new MySqlCommand(string.Empty, myConn);
                 command8.CommandText = @"select * from skinsites";
                 command8.ExecuteNonQuery();
 
-                MySqlDataReader myReader8;
+              /*  MySqlDataReader myReader8;
                 
                 myReader8 = command8.ExecuteReader();
                 int num_records3 = 0; //Convert.ToInt32(command8.ExecuteScalar());
@@ -1946,7 +1979,10 @@ namespace BlueDolphin.Renewal
                     num_records3++;
                 }
 
-                skinsites[num_records3]= new Dictionary<string, object>();
+                myReader8.Close();
+                myReader8 = command8.ExecuteReader();
+
+                //skinsites = new Dictionary<string, object>();
 
                 int q = 0;
 
@@ -1954,13 +1990,37 @@ namespace BlueDolphin.Renewal
                 {
                     for (int skin = 0; skin < myReader8.FieldCount; skin++)
                     {
-                        skinsites[q].Add(myReader8.GetName(skin), myReader8.GetValue(skin));
+                        skinsites.Add(myReader8.GetName(skin), myReader8.GetValue(skin));
                     }
 
                     q++;
                 }
 
                 myReader8.Close();
+                */
+
+                skinsites = new DataTable();
+
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command8))
+                {
+                    da.Fill(skinsites);
+
+                }
+
+                //setup the skinsite configurations
+                command9 = new MySqlCommand(string.Empty, myConn);
+                command9.CommandText =
+                    @"select cs.skinsites_id, c.configuration_key as cfgKey, c.configuration_value as cfgValue, cs.skinsites_configuration_value from configuration c, configuration_skinsites cs where cs.configuration_id = c.configuration_id";
+                command9.ExecuteNonQuery();
+
+
+                skinsites_configuration_defines = new DataTable();
+
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command8))
+                {
+                    da.Fill(skinsites_configuration_defines);
+
+                }
 
             }
             catch (Exception e)
