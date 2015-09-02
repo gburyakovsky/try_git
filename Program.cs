@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Data.Sql;
 using System.Diagnostics.Eventing.Reader;
+using System.Globalization;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -111,6 +112,7 @@ namespace BlueDolphin.Renewal
         public static string MODULE_PAYMENT_PAYFLOWPRO_TEXT_ERROR = "Credit Card Error!";
         public static string DATE_FORMAT_DB = "%Y-%m-%d %H:%M:%S";
         public static string FILENAME_PRODUCT_INFO = "product_info.php";
+        public static string DEFAULT_ORDERS_STATUS_ID = "null";
 
         //the following are defined in renewal_track_emails table.
         public static string TRACK1 = "1014";
@@ -210,6 +212,7 @@ namespace BlueDolphin.Renewal
         private static string products_billing_descriptor;
         private static string cc_expires_year;
         private static string cc_expires_month;
+        private static string query = string.Empty;
         private static bool is_perfect_renewal;
 
         private static List<string> all_countries_array = new List<string>();
@@ -226,6 +229,7 @@ namespace BlueDolphin.Renewal
         private static DataTable skinsites;
         private static DataTable skinsites_configuration_defines;
         private static DataTable currencies;
+
 
         /// <summary>
         /// 
@@ -1587,6 +1591,7 @@ namespace BlueDolphin.Renewal
                 Dictionary<string, object> renewal_order_product = new Dictionary<string, object>();
 
                 int n = orders_columns.Count;
+                int j = orders_products_columns.Count;
                 string column_name = string.Empty;
 
                 //now loop through each and create an array for each table with data from $order.
@@ -1597,8 +1602,14 @@ namespace BlueDolphin.Renewal
                 {
                     column_name = orders_columns[i].ToString();
                     renewal_order.Add(column_name, order[column_name]);
-                    //renewal_order[column_name] = order[column_name];
-                    //  $renewal_order[$column_name] = $order[$column_name];
+                   
+                }
+
+                for (int x = 0; x < j; x++)
+                {
+                    column_name = orders_products_columns[x].ToString();
+                    renewal_order_product.Add(column_name, order[column_name]);
+                  
                 }
 
                 //creates the parent order number.
@@ -1607,175 +1618,92 @@ namespace BlueDolphin.Renewal
                 command  = new MySqlCommand("insert into orders_groups (orders_groups_id) VALUES ('')", myConn);
                 command.ExecuteNonQuery();
 
-                int renewal_orders_groups_id = tep_db_insert_id();
+                int renewal_orders_groups_id = Convert.ToInt32(command.LastInsertedId);
+                renewal_order["orders_groups_id"] = renewal_orders_groups_id;
 
-                /*   $renewal_order = array();
-	                                    $renewal_order_product = array();
+                //If renewal cc data exists (renewal_payment_cards_id) on the original order, use it to set the cc fields for the renewal
+                if (renewal_order["renewal_payment_cards_id"].ToString() != string.Empty)
+                {
+                    renewal_order["cc_type"] = order["renewal_cc_type"];
+		            renewal_order["cc_owner"] = order["renewal_cc_owner"];
+		            renewal_order["cc_expires"] = order["renewal_cc_expires"];
+		            renewal_order["cc_number"] = order["renewal_cc_number"];
+		            renewal_order["cc_number_display"] = order["renewal_cc_number_display"];
+		            renewal_order["payment_cards_id"] = order["renewal_payment_cards_id"];
+		            renewal_order["payment_method"] = "cc";
 
-	                                    //get the columns array for neccessary tables.
-	                                    $orders_columns = unserialize(ORDERS_COLUMNS);
-	                                    $orders_products_columns = unserialize(ORDERS_PRODUCTS_COLUMNS);
+                }
 
+                // Account for "partner_paid" orders by setting them to "cc" for the renewal order (MCS 3/2015)
+                if (renewal_order["payment_method"] == "partner_paid")
+                {
+                    renewal_order["payment_method"] = "cc";
+                }
 
-	                                    //now loop through each and create an array for each table with data from $order.
-	                                    //this allows us to just override the columns we want and have the rest automatically
-	                                    //copied over.
-	                                    for ($i=0, $n=sizeof($orders_columns); $i<$n; $i++) {
-		                                    $column_name = $orders_columns[$i];
-		                                    $renewal_order[$column_name] = $order[$column_name];
-	                                    }
-	                                    for ($i=0, $n=sizeof($orders_products_columns); $i<$n; $i++) {
-		                                    $column_name = $orders_products_columns[$i];
-		                                    $renewal_order_product[$column_name] = $order[$column_name];
-	                                    }
+                //get rid of the unwanted fields
+                renewal_order.Remove("orders_id");
+                renewal_order.Remove("renewal_payment_cards_id");
 
-	                                    $renewal_orders_id = '';
+                //THIS IS COMMENTED OUT SINCE IT SHOULD STAY A CC ORDER. IF IT IS A TRACK 2 IT WON'T GET PULLED
+                //FOR CHARGING AND IF CHECK COMES IN, CUSTCARE CAN CHANGE IT THERE TO A CHECK ENTRY.
+                //overwrite fields.
+                //if this isn't a perfect renewal make this an invoice order.
+                //but leave the credit card info in place for next year renewals (especially Master Card)
+                //if (!$is_perfect_renewal) {
+                //    	$renewal_order['payment_method'] = 'check';
+                //     $renewal_order['cc_type'] = '';
+                //     $renewal_order['cc_owner'] = '';
+                //     $renewal_order['cc_number'] = '';
+                //     $renewal_order['cc_expires']   = '';
+                //     $renewal_order['cc_number_display']   = '';
+                //     $renewal_order['payment_cards_id'] = 0;
+                //}
+                renewal_order["last_modified"] = "null";
+                renewal_order["date_purchased"] = "now()";
+                //set to pending.
+                renewal_order["orders_status"] = DEFAULT_ORDERS_STATUS_ID;
+                renewal_order["orders_date_finished"] = "null";
+	            renewal_order["source_id"] = "null";
+	            renewal_order["source_id_time_entered"] = "null";
+	            renewal_order["source_id_type"] = "null";
+	            renewal_order["mystery_gifts_id"] = "null";
+	            renewal_order["quickshop_used"] = 0;
+                //get the price from the renewal sku.
+                renewal_order["amount_owed"] = renewal_sku["skus_price"];
+                renewal_order["amount_paid"] = 0;
+                renewal_order["is_buyagain"] = "0";
+                renewal_order["fulfillment_batch_id"] = "null";
+                renewal_order["skus_id_used_for_fulfillment"] = 0;
+                //renewal_date will be filled in when the the order is paid (when adding fulfill batch_item).
+                renewal_order["renewal_date"] = "null";
+	            renewal_order["renewal_invoices_created"] = 0;
+	            renewal_order["renewal_invoices_sent"] = 0;
+                //end_delivery_range will be setup when the order is paid(when adding fulfill batch_item).
+                renewal_order["end_delivery_range"] = "";
+	            renewal_order["renewal_transaction_date"] = "null";
+	            renewal_order["renewal_orders_id"] = "null";
+	            renewal_order["prior_orders_id"] = order["orders_id"];
+	            renewal_order["is_renewal_order"] = 1;
+	            renewal_order["renewals_billing_series_id"] = renewals_billing_series_id;
+	            renewal_order["is_gift"] = order["is_gift"];
+	            renewal_order["renewals_credit_card_charge_attempts"] = 0;
+                if(is_postcard_confirmation.ToString()=="1") 
+                    renewal_order["is_postcard_confirmation"] = "1";
+                if(is_postcard_confirmation.ToString()=="1") 
+                    renewal_order["postcard_confirmation_date"] = "now()";
 
-	                                    //creates the parent order number.
-	                                    //and set it on the new order.
-	                                    tep_db_query("insert into orders_groups (orders_groups_id) VALUES ('')");
-	                                    $renewal_orders_groups_id = tep_db_insert_id();
-	                                    $renewal_order['orders_groups_id'] = $renewal_orders_groups_id;
-
-	                                    //If renewal cc data exists (renewal_payment_cards_id) on the original order, use it to set the cc fields for the renewal
-	                                    if($renewal_order['renewal_payment_cards_id']){
-		                                    $renewal_order['cc_type'] = $order['renewal_cc_type'];
-		                                    $renewal_order['cc_owner'] = $order['renewal_cc_owner'];
-		                                    $renewal_order['cc_expires'] = $order['renewal_cc_expires'];
-		                                    $renewal_order['cc_number'] = $order['renewal_cc_number'];
-		                                    $renewal_order['cc_number_display'] = $order['renewal_cc_number_display'];
-		                                    $renewal_order['payment_cards_id'] = $order['renewal_payment_cards_id'];
-		                                    $renewal_order['payment_method'] = 'cc';
-	                                    }
-
-	                                    // Account for "partner_paid" orders by setting them to "cc" for the renewal order (MCS 3/2015)
-	                                    if($renewal_order['payment_method'] == 'partner_paid') $renewal_order['payment_method'] = 'cc';
-
-	                                    //get rid of the unwanted fields
-	                                    unset($renewal_order['orders_id']);
-	                                    unset($renewal_order['renewal_payment_cards_id']);
-
-	                                    //THIS IS COMMENTED OUT SINCE IT SHOULD STAY A CC ORDER. IF IT IS A TRACK 2 IT WON'T GET PULLED
-	                                    //FOR CHARGING AND IF CHECK COMES IN, CUSTCARE CAN CHANGE IT THERE TO A CHECK ENTRY.
-	                                    //overwrite fields.
-	                                    //if this isn't a perfect renewal make this an invoice order.
-	                                    //but leave the credit card info in place for next year renewals (especially Master Card)
-	                                    //if (!$is_perfect_renewal) {
-	                                    //    	$renewal_order['payment_method'] = 'check';
-	                                    //     $renewal_order['cc_type'] = '';
-	                                    //     $renewal_order['cc_owner'] = '';
-	                                    //     $renewal_order['cc_number'] = '';
-	                                    //     $renewal_order['cc_expires']   = '';
-	                                    //     $renewal_order['cc_number_display']   = '';
-	                                    //     $renewal_order['payment_cards_id'] = 0;
-	                                    //}
-	                                    $renewal_order['last_modified'] ='null';
-	                                    $renewal_order['date_purchased'] = 'now()';
-	                                    //set to pending.
-	                                    $renewal_order['orders_status'] = DEFAULT_ORDERS_STATUS_ID;
-	                                    $renewal_order['orders_date_finished'] = 'null';
-	                                    $renewal_order['source_id'] = 'null';
-	                                    $renewal_order['source_id_time_entered'] = 'null';
-	                                    $renewal_order['source_id_type'] = 'null';
-	                                    $renewal_order['mystery_gifts_id'] = 'null';
-	                                    $renewal_order['quickshop_used'] = 0;
-	                                    //get the price from the renewal sku.
-	                                    $renewal_order['amount_owed'] = $renewal_sku['skus_price'];
-	                                    $renewal_order['amount_paid'] = 0;
-	                                    $renewal_order['is_buyagain'] = '0';
-	                                    $renewal_order['fulfillment_batch_id'] = 'null';
-	                                    $renewal_order['skus_id_used_for_fulfillment'] = 0;
-	                                    //renewal_date will be filled in when the the order is paid (when adding fulfill batch_item).
-	                                    $renewal_order['renewal_date'] = 'null';
-	                                    $renewal_order['renewal_invoices_created'] = 0;
-	                                    $renewal_order['renewal_invoices_sent'] = 0;
-	                                    //end_delivery_range will be setup when the order is paid(when adding fulfill batch_item).
-	                                    $renewal_order['end_delivery_range'] = '';
-	                                    $renewal_order['renewal_transaction_date'] = 'null';
-	                                    $renewal_order['renewal_orders_id'] = 'null';
-	                                    $renewal_order['prior_orders_id'] = $order['orders_id'];
-	                                    $renewal_order['is_renewal_order'] = 1;
-	                                    $renewal_order['renewals_billing_series_id'] = $renewals_billing_series_id;
-	                                    $renewal_order['is_gift'] = $order['is_gift'];
-	                                    $renewal_order['renewals_credit_card_charge_attempts'] = 0;
-	                                    if($is_postcard_confirmation) $renewal_order['is_postcard_confirmation'] = '1';
-	                                    if($is_postcard_confirmation) $renewal_order['postcard_confirmation_date'] = 'now()';
-
-	                                    //clear our delayed billing data.
-	                                    $renewal_order['is_delayed_billing'] = 0;
-	                                    $renewal_order['is_delayed_billing_paid'] = 0;
-	                                    $renewal_order['delayed_billing_date'] = 'null';
-	                                    $renewal_order['delayed_billing_credit_card_charge_attempts'] = 0;
-
-	                                    // clear renewal error
-	                                    $renewal_order['renewal_error'] = 0;
-	                                    $renewal_order['renewal_error_description'] = '';
+                //clear our delayed billing data.
+                renewal_order["is_delayed_billing"] = 0;
+	            renewal_order["is_delayed_billing_paid"] = 0;
+	            renewal_order["delayed_billing_date"] = "null";
+	            renewal_order["delayed_billing_credit_card_charge_attempts"] = 0;
 
 
-	                                    //this used to be on the original order now moved here.
-	                                    if ($is_perfect_renewal) {
-		                                    if($is_postcard_confirmation){
-			                                    $renewal_order['renewal_transaction_date'] = 'date_add(now(), INTERVAL ' . RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS . ' DAY)';
-		                                    }else{
-			                                    $renewal_order['renewal_transaction_date'] = 'date_add(now(), INTERVAL ' . DEFAULT_RENEWAL_CHARGE_DAYS . ' DAY)';
-		                                    }
-	                                    }
-
-	                                    tep_db_perform('orders', $renewal_order);
-	                                    $renewal_orders_id = tep_db_insert_id();
-
-	                                    if ($renewal_orders_id) {
-		                                    //orders_product table overwrites.
-		                                    unset($renewal_order_product['orders_products_id']);
-		                                    $renewal_order_product['orders_id'] = $renewal_orders_id;
-		                                    $renewal_order_product['skus_id'] = $renewal_sku['skus_id'];
-		                                    $renewal_order_product['products_price'] = $renewal_sku['skus_price'];
-		                                    $renewal_order_product['final_price'] = $renewal_sku['skus_price'];
-		                                    $renewal_order_product['location'] = 'renewal';
-
-		                                    tep_db_perform('orders_products', $renewal_order_product);
-
-		                                    //order_status_history
-		                                    $renewal_order_status_history = array();
-		                                    $renewal_order_status_history['orders_id'] = $renewal_orders_id;
-		                                    $renewal_order_status_history['orders_status_id'] = DEFAULT_ORDERS_STATUS_ID;
-		                                    $renewal_order_status_history['date_added'] = 'now()';
-		                                    $renewal_order_status_history['comments'] = DEFAULT_PENDING_COMMENT;
-		                                    tep_db_perform('orders_status_history', $renewal_order_status_history);
-
-		                                    //order_total (mimicking what the ot_ classes do.
-		                                    $renewal_order_total = array();
-		                                    $renewal_order_total['orders_id'] = $renewal_orders_id;
-		                                    $renewal_order_total['title'] = 'Total:';
-		                                    $renewal_order_total['text'] = "<b>" . get_currency_format($renewal_sku['skus_price'], $renewal_order['currency']) . "</b>";
-		                                    $renewal_order_total['value'] = $renewal_sku['skus_price'];
-		                                    $renewal_order_total['class'] = 'ot_total';
-		                                    $renewal_order_total['sort_order'] = '800';
-		                                    tep_db_perform('orders_total', $renewal_order_total);
-
-		                                    $renewal_order_subtotal = array();
-		                                    $renewal_order_subtotal['orders_id'] = $renewal_orders_id;
-		                                    $renewal_order_subtotal['title'] = 'Sub-Total:';
-		                                    $renewal_order_subtotal['text'] = get_currency_format($renewal_sku['skus_price'], $renewal_order['currency']);
-		                                    $renewal_order_subtotal['value'] = $renewal_sku['skus_price'];
-		                                    $renewal_order_subtotal['class'] = 'ot_subtotal';
-		                                    $renewal_order_subtotal['sort_order'] = '1';
-		                                    tep_db_perform('orders_total', $renewal_order_subtotal);
-
-	                                    } else {
-		                                    log_renewal_process("ERROR: Unable to create renewal order.", $order['orders_id']);
-	                                    }
-
-
-	                                    debug($renewal_order, 'renewal_order');
-	                                    debug($renewal_order_product, 'renewal_order_product');
-	                                    debug($renewal_order_total, 'renewal_order_total');
-	                                    debug($renewal_order_subtotal, 'renewal_order_subtotal');
-	                                    debug($order, 'order');
-
-
-	                                    return $renewal_orders_id; */
-
+                debug(renewal_order, "renewal_order");
+	            debug(renewal_order_product, "renewal_order_product");
+	            debug(renewal_order_total, "renewal_order_total");
+	            debug(renewal_order_subtotal, "renewal_order_subtotal");
+	            debug(order, "order");
 
                 return renewal_orders_id;
             }
@@ -2226,11 +2154,11 @@ namespace BlueDolphin.Renewal
 
         }
 
-        private static int tep_db_insert_id()
+        private static int tep_db_insert_id(string link = "db_link")
         {
             try
             {
-
+                
                 return 1;
 
             }
@@ -2242,6 +2170,60 @@ namespace BlueDolphin.Renewal
             }
         }
 
+
+        private static void debug(Dictionary<string, object> array, string name)
+        {
+            try
+            {
+
+                if (Debug != true)
+                    return;
+
+                foreach (KeyValuePair<string, object> KV in array)
+                {
+                    var my_array = array[KV.Key];
+
+                    if (my_array == typeof(KeyValuePair<,>))
+                    {
+                        //my_array = new Dictionary<string, object>();
+                        Console.WriteLine(my_array.ToString()+" is a key,value pair.");
+                        //debug(my_array, name + "[" + KV.Key + "]");
+                    }
+                    else
+                    {
+                        Console.WriteLine(name+"["+KV.Key+"]="+array[KV.Key].ToString()+"\n");
+                    }
+                    
+                }
+
+                Console.WriteLine("\n");
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                
+            }
+        }
+
+        private static string tep_db_perform(string table, Dictionary<string, object> data, string action = "insert", string parameters = "", string link = "db_link")
+        {
+            try
+            {
+                if (action == "insert")
+                {
+                    query = "insert into " + table + "(";
+                }
+                return query;
+            }
+            catch (Exception e)
+            {
+                
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
     }
 
 }
