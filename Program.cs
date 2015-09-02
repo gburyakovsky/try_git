@@ -113,6 +113,8 @@ namespace BlueDolphin.Renewal
         public static string DATE_FORMAT_DB = "%Y-%m-%d %H:%M:%S";
         public static string FILENAME_PRODUCT_INFO = "product_info.php";
         public static string DEFAULT_ORDERS_STATUS_ID = "null";
+        public static string RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = "0";
+        public static string DEFAULT_RENEWAL_CHARGE_DAYS = "0";
 
         //the following are defined in renewal_track_emails table.
         public static string TRACK1 = "1014";
@@ -221,6 +223,9 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> zones;
         //private static Dictionary<string, object> currencies;
         private static Dictionary<object, object> configuration;
+        private static Dictionary<string, object> renewal_order_status_history;
+        private static Dictionary<string, object> renewal_order_total;
+        private static Dictionary<string, object> renewal_order_subtotal;
         private static List<string> orders_columns;
         private static List<string> orders_products_columns;
         //private static Dictionary<string, object> renewels_billing_series_array;
@@ -1585,8 +1590,9 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+                string queryString = string.Empty;
                 int renewal_orders_id = 0;
-                
+
                 Dictionary<string, object> renewal_order = new Dictionary<string, object>();
                 Dictionary<string, object> renewal_order_product = new Dictionary<string, object>();
 
@@ -1595,27 +1601,27 @@ namespace BlueDolphin.Renewal
                 string column_name = string.Empty;
 
                 //now loop through each and create an array for each table with data from $order.
-	            //this allows us to just override the columns we want and have the rest automatically
-	            //copied over.
+                //this allows us to just override the columns we want and have the rest automatically
+                //copied over.
 
                 for (int i = 0; i < n; i++)
                 {
                     column_name = orders_columns[i].ToString();
                     renewal_order.Add(column_name, order[column_name]);
-                   
+
                 }
 
                 for (int x = 0; x < j; x++)
                 {
                     column_name = orders_products_columns[x].ToString();
                     renewal_order_product.Add(column_name, order[column_name]);
-                  
+
                 }
 
                 //creates the parent order number.
                 //and set it on the new order.
 
-                command  = new MySqlCommand("insert into orders_groups (orders_groups_id) VALUES ('')", myConn);
+                command = new MySqlCommand("insert into orders_groups (orders_groups_id) VALUES ('')", myConn);
                 command.ExecuteNonQuery();
 
                 int renewal_orders_groups_id = Convert.ToInt32(command.LastInsertedId);
@@ -1625,17 +1631,17 @@ namespace BlueDolphin.Renewal
                 if (renewal_order["renewal_payment_cards_id"].ToString() != string.Empty)
                 {
                     renewal_order["cc_type"] = order["renewal_cc_type"];
-		            renewal_order["cc_owner"] = order["renewal_cc_owner"];
-		            renewal_order["cc_expires"] = order["renewal_cc_expires"];
-		            renewal_order["cc_number"] = order["renewal_cc_number"];
-		            renewal_order["cc_number_display"] = order["renewal_cc_number_display"];
-		            renewal_order["payment_cards_id"] = order["renewal_payment_cards_id"];
-		            renewal_order["payment_method"] = "cc";
+                    renewal_order["cc_owner"] = order["renewal_cc_owner"];
+                    renewal_order["cc_expires"] = order["renewal_cc_expires"];
+                    renewal_order["cc_number"] = order["renewal_cc_number"];
+                    renewal_order["cc_number_display"] = order["renewal_cc_number_display"];
+                    renewal_order["payment_cards_id"] = order["renewal_payment_cards_id"];
+                    renewal_order["payment_method"] = "cc";
 
                 }
 
                 // Account for "partner_paid" orders by setting them to "cc" for the renewal order (MCS 3/2015)
-                if (renewal_order["payment_method"] == "partner_paid")
+                if (renewal_order["payment_method"].ToString() == "partner_paid")
                 {
                     renewal_order["payment_method"] = "cc";
                 }
@@ -1663,11 +1669,11 @@ namespace BlueDolphin.Renewal
                 //set to pending.
                 renewal_order["orders_status"] = DEFAULT_ORDERS_STATUS_ID;
                 renewal_order["orders_date_finished"] = "null";
-	            renewal_order["source_id"] = "null";
-	            renewal_order["source_id_time_entered"] = "null";
-	            renewal_order["source_id_type"] = "null";
-	            renewal_order["mystery_gifts_id"] = "null";
-	            renewal_order["quickshop_used"] = 0;
+                renewal_order["source_id"] = "null";
+                renewal_order["source_id_time_entered"] = "null";
+                renewal_order["source_id_type"] = "null";
+                renewal_order["mystery_gifts_id"] = "null";
+                renewal_order["quickshop_used"] = 0;
                 //get the price from the renewal sku.
                 renewal_order["amount_owed"] = renewal_sku["skus_price"];
                 renewal_order["amount_paid"] = 0;
@@ -1676,21 +1682,25 @@ namespace BlueDolphin.Renewal
                 renewal_order["skus_id_used_for_fulfillment"] = 0;
                 //renewal_date will be filled in when the the order is paid (when adding fulfill batch_item).
                 renewal_order["renewal_date"] = "null";
-	            renewal_order["renewal_invoices_created"] = 0;
-	            renewal_order["renewal_invoices_sent"] = 0;
+                renewal_order["renewal_invoices_created"] = 0;
+                renewal_order["renewal_invoices_sent"] = 0;
                 //end_delivery_range will be setup when the order is paid(when adding fulfill batch_item).
                 renewal_order["end_delivery_range"] = "";
-	            renewal_order["renewal_transaction_date"] = "null";
-	            renewal_order["renewal_orders_id"] = "null";
-	            renewal_order["prior_orders_id"] = order["orders_id"];
-	            renewal_order["is_renewal_order"] = 1;
-	            renewal_order["renewals_billing_series_id"] = renewals_billing_series_id;
-	            renewal_order["is_gift"] = order["is_gift"];
-	            renewal_order["renewals_credit_card_charge_attempts"] = 0;
-                if(is_postcard_confirmation.ToString()=="1") 
+                renewal_order["renewal_transaction_date"] = "null";
+                renewal_order["renewal_orders_id"] = "null";
+                renewal_order["prior_orders_id"] = order["orders_id"];
+                renewal_order["is_renewal_order"] = 1;
+                renewal_order["renewals_billing_series_id"] = renewals_billing_series_id;
+                renewal_order["is_gift"] = order["is_gift"];
+                renewal_order["renewals_credit_card_charge_attempts"] = 0;
+
+                if (is_postcard_confirmation == 1)
+                {
+
                     renewal_order["is_postcard_confirmation"] = "1";
-                if(is_postcard_confirmation.ToString()=="1") 
+                    //if (is_postcard_confirmation == 1)
                     renewal_order["postcard_confirmation_date"] = "now()";
+                }
 
                 //clear our delayed billing data.
                 renewal_order["is_delayed_billing"] = 0;
@@ -1698,11 +1708,95 @@ namespace BlueDolphin.Renewal
 	            renewal_order["delayed_billing_date"] = "null";
 	            renewal_order["delayed_billing_credit_card_charge_attempts"] = 0;
 
+                // clear renewal error
+	            renewal_order["renewal_error"] = 0;
+	            renewal_order["renewal_error_description"] = "";
+
+                //this used to be on the original order now moved here.
+                if (is_perfect_renewal)
+                {
+                    if (is_postcard_confirmation == 1)
+                    {
+
+                        renewal_order["renewal_transaction_date"] = "date_add(now(), INTERVAL " +
+                                                                    RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS + " DAY)";
+
+                    }
+                    else
+                    {
+
+                        renewal_order["renewal_transaction_date"] = "date_add(now(), INTERVAL " +
+                                                                    DEFAULT_RENEWAL_CHARGE_DAYS + " DAY)";
+
+                    }
+                }
+
+                queryString = tep_db_perform("orders", renewal_order);
+                command2 = new MySqlCommand(queryString, myConn);
+                command.ExecuteNonQuery();
+                renewal_orders_id = Convert.ToInt32(command.LastInsertedId);
+
+                if (renewal_orders_id != 0 || renewal_orders_id.ToString() != string.Empty)
+                {
+                    //orders_product table overwrites.
+                    //unset($renewal_order_product['orders_products_id']);
+                    renewal_order_product["orders_id"] = renewal_orders_id;
+                    renewal_order_product["skus_id"] = renewal_sku["skus_id"];
+                    renewal_order_product["products_price"] = renewal_sku["skus_price"];
+                    renewal_order_product["final_price"] = renewal_sku["skus_price"];
+                    renewal_order_product["location"] = "renewal";
+
+                    queryString = tep_db_perform("orders_products", renewal_order_product);
+                    command3 = new MySqlCommand(queryString, myConn);
+                    command3.ExecuteNonQuery();
+
+                    //order_status_history
+                    renewal_order_status_history["orders_id"] = renewal_orders_id;
+                    renewal_order_status_history["orders_status_id"] = DEFAULT_ORDERS_STATUS_ID;
+                    renewal_order_status_history["date_added"] = "now()";
+                    renewal_order_status_history["comments"] = DEFAULT_PENDING_COMMENT;
+
+                    queryString = tep_db_perform("orders_status_history", renewal_order_status_history);
+                    command3 = new MySqlCommand(queryString, myConn);
+                    command3.ExecuteNonQuery();
+
+                    //order_total (mimicking what the ot_ classes do.
+                    renewal_order_total["orders_id"] = renewal_orders_id;
+                    renewal_order_total["title"] = "Total:";
+                    renewal_order_total["text"] = "<b>" +
+                                                  get_currency_format(renewal_sku["skus_price"].ToString(),
+                                                      renewal_order["currency"].ToString()) + "</b>";
+                    renewal_order_total["value"] = renewal_sku["skus_price"];
+                    renewal_order_total["class"] = "ot_total";
+                    renewal_order_total["sort_order"] = "800";
+
+                    queryString =
+                        tep_db_perform("orders_total", renewal_order_total);
+                    command4 = new MySqlCommand(queryString, myConn);
+                    command4.ExecuteNonQuery();
+
+                    renewal_order_subtotal["orders_id"] = renewal_orders_id;
+                    renewal_order_subtotal["title"] = "Sub-Total:";
+                    renewal_order_subtotal["text"] = get_currency_format(renewal_sku["skus_price"].ToString(), renewal_order["currency"].ToString());
+                    renewal_order_subtotal["value"] = renewal_sku["skus_price"];
+                    renewal_order_subtotal["class"] = "ot_subtotal";
+                    renewal_order_subtotal["sort_order"] = "1";
+
+                    queryString=tep_db_perform("orders_total", renewal_order_subtotal);
+                    command4 = new MySqlCommand(queryString, myConn);
+                    command4.ExecuteNonQuery();
+
+
+                }
+                else
+                {
+                    log_renewal_process("ERROR: Unable to create renewal order.", Convert.ToInt32(order["orders_id"]));
+                }
 
                 debug(renewal_order, "renewal_order");
 	            debug(renewal_order_product, "renewal_order_product");
-	            debug(renewal_order_total, "renewal_order_total");
-	            debug(renewal_order_subtotal, "renewal_order_subtotal");
+	            //debug(renewal_order_total, "renewal_order_total");
+	            //debug(renewal_order_subtotal, "renewal_order_subtotal");
 	            debug(order, "order");
 
                 return renewal_orders_id;
@@ -2223,6 +2317,22 @@ namespace BlueDolphin.Renewal
                 return e.Message;
             }
 
+        }
+
+        private static string get_currency_format(string number, string currency_type)
+        {
+            try
+            {
+                //get the currencies
+
+                return currencies.ToString();
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
         }
     }
 
