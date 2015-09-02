@@ -223,6 +223,8 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> zones;
         //private static Dictionary<string, object> currencies;
         private static Dictionary<object, object> configuration;
+        private static Dictionary<string, object> renewal_order; //= new Dictionary<string, object>();
+        private static Dictionary<string, object> renewal_order_product;  //=new Dictionary<string, object>();
         private static Dictionary<string, object> renewal_order_status_history;
         private static Dictionary<string, object> renewal_order_total;
         private static Dictionary<string, object> renewal_order_subtotal;
@@ -1593,12 +1595,15 @@ namespace BlueDolphin.Renewal
                 string queryString = string.Empty;
                 int renewal_orders_id = 0;
 
-                Dictionary<string, object> renewal_order = new Dictionary<string, object>();
-                Dictionary<string, object> renewal_order_product = new Dictionary<string, object>();
-
                 int n = orders_columns.Count;
                 int j = orders_products_columns.Count;
                 string column_name = string.Empty;
+
+                renewal_order = new Dictionary<string, object>();
+                renewal_order_product = new Dictionary<string, object>();
+                renewal_order_status_history = new Dictionary<string, object>();
+                renewal_order_total = new Dictionary<string, object>();
+                renewal_order_subtotal = new Dictionary<string, object>();
 
                 //now loop through each and create an array for each table with data from $order.
                 //this allows us to just override the columns we want and have the rest automatically
@@ -1795,8 +1800,8 @@ namespace BlueDolphin.Renewal
 
                 debug(renewal_order, "renewal_order");
 	            debug(renewal_order_product, "renewal_order_product");
-	            //debug(renewal_order_total, "renewal_order_total");
-	            //debug(renewal_order_subtotal, "renewal_order_subtotal");
+	            debug(renewal_order_total, "renewal_order_total");
+	            debug(renewal_order_subtotal, "renewal_order_subtotal");
 	            debug(order, "order");
 
                 return renewal_orders_id;
