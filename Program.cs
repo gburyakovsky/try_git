@@ -2440,8 +2440,14 @@ namespace BlueDolphin.Renewal
             try
             {
                 //get the currencies
+                var results = (from m in currencies.AsEnumerable()
+                               where m.Field<string>("code") == currency_type
+                               select m).FirstOrDefault();
+
 
                 return currencies.ToString();
+
+
             }
             catch (Exception e)
             {
