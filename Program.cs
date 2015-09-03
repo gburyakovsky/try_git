@@ -133,6 +133,11 @@ namespace BlueDolphin.Renewal
         public static int number_of_renewal_paper_invoices_file_records;
         public static int number_of_invoices_cleaned_up;
         public static int number_of_renewal_orders_mass_cancelled;
+        private static int order_fulfillment_batch_id;
+        private static int is_renewal_order;
+        private static int orders_status;
+        private static string skus_type;
+        private static int skus_type_order_period;
 
         /// <summary>
         /// Variables
@@ -185,7 +190,8 @@ namespace BlueDolphin.Renewal
         private static int renewals_credit_card_charge_attempts;
         private static int renewals_expiration_date_failures;
         private static int payment_cards_id;
-
+        private static int first_issue_delay_days;
+        private static int days_spanned;
         private static string billing_first_name;
         private static string billing_last_name;
         private static string billing_address_line_1;
@@ -217,6 +223,7 @@ namespace BlueDolphin.Renewal
         private static string cc_expires_month;
         private static string query = string.Empty;
         private static bool is_perfect_renewal;
+        private static string compare_date;
 
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
@@ -237,6 +244,7 @@ namespace BlueDolphin.Renewal
         private static DataTable skinsites;
         private static DataTable skinsites_configuration_defines;
         private static DataTable currencies;
+        private static DataTable getFulfillmentBatchWeek = null;
 
 
         /// <summary>
@@ -1866,41 +1874,11 @@ namespace BlueDolphin.Renewal
 
                 currencies = new DataTable();
 
-                using (MySqlDataAdapter da = new MySqlDataAdapter(command7))
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command3))
                 {
                     da.Fill(currencies);
 
                 }
-
-               /* MySqlDataReader myReader3;
-                myReader3 = command3.ExecuteReader();
-                int num_records = 0; //Convert.ToInt32(command3.ExecuteScalar());
-
-                while (myReader3.Read())
-                {
-                    num_records++;
-                }
-
-                myReader3.Close();
-                myReader3 = command3.ExecuteReader();
-
-                currencies = new Dictionary<string, object>();
-                int i = 0;
-
-                while (myReader3.Read())
-                {
-                    currencies.Add("code", myReader3["code"]);
-                    currencies.Add("title", myReader3["title"]);
-                    currencies.Add("symbol_left", myReader3["symbol_left"]);
-                    currencies.Add("symbol_right", myReader3["symbol_right"]);
-                    currencies.Add("decimal_point", myReader3["decimal_point"]);
-                    currencies.Add("thousands_point", myReader3["thousands_point"]);
-                    currencies.Add("decimal_places", myReader3["decimal_places"]);
-                    currencies.Add("value", myReader3["value"]);
-                 
-                }
-
-                myReader3.Close(); */
 
                 //configuration table
 
@@ -2057,7 +2035,7 @@ namespace BlueDolphin.Renewal
 
                 skinsites_configuration_defines = new DataTable();
 
-                using (MySqlDataAdapter da = new MySqlDataAdapter(command8))
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command9))
                 {
                     da.Fill(skinsites_configuration_defines);
 
@@ -2127,6 +2105,36 @@ namespace BlueDolphin.Renewal
 
                 update_orders_fulfillment_status_id = true;
 
+                //should always just have 1 orders_producst row so limit by 1.
+                command =
+                    new MySqlCommand(
+                        @"select op.products_id, o.date_purchased, o.orders_status, o.fulfillment_batch_id, s.skus_type, s.skus_type_order, s.skus_type_order_period, if(p.first_issue_delay_days=0,pf.first_issue_delay_days, p.first_issue_delay_days) as first_issue_delay_days, o.prior_orders_id, o.is_renewal_order, s.skus_days_spanned from " +
+                        TABLE_ORDERS_PRODUCTS + " op, " + TABLE_ORDERS + " o, " + TABLE_SKUS + " s, " + TABLE_PRODUCTS +
+                        " p, " + TABLE_PUBLICATION_FREQUENCY +
+                        " pf where op.products_id = p.products_id and p.publication_frequency_id = pf.publication_frequency_id and o.orders_id = op.orders_id and s.skus_id = op.skus_id and o.orders_id = '" +
+                        orders_id.ToString() + "' limit 1", myConn);
+                command.ExecuteNonQuery();
+
+                MySqlDataReader order_product_info_array;
+                order_product_info_array = command.ExecuteReader();
+
+                while (order_product_info_array.Read())
+                {
+                    products_id = Convert.ToInt32(order_product_info_array["products_id"]);
+	                first_issue_delay_days = Convert.ToInt32(order_product_info_array["first_issue_delay_days"]);
+	                skus_type = order_product_info_array["skus_type"].ToString();
+	                skus_type_order = Convert.ToInt32(order_product_info_array["skus_type_order"]);
+	                skus_type_order_period = Convert.ToInt32(order_product_info_array["skus_type_order_period"]);
+	                prior_orders_id = Convert.ToInt32(order_product_info_array["prior_orders_id"]);
+	                is_renewal_order = Convert.ToInt32(order_product_info_array["is_renewal_order"]);
+	                orders_status = Convert.ToInt32(order_product_info_array["orders_status"]);
+	                days_spanned = Convert.ToInt32(order_product_info_array["skus_days_spanned"]);
+	                order_fulfillment_batch_id = Convert.ToInt32(order_product_info_array["fulfillment_batch_id"]);
+	                date_purchased =  Convert.ToDateTime(order_product_info_array["date_purchased"]);
+                    
+                }
+
+                order_product_info_array.Close();
 
             }
             catch (Exception e)
@@ -2441,6 +2449,44 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
+        }
+
+        private static DataTable get_fulfillment_batch_week(String compareDate)
+        {
+            try
+            {
+
+                if (compareDate == null)
+                {
+                    compareDate = "now()";
+                }
+
+                command = new MySqlCommand(string.Empty, myConn);
+                command.CommandText = @"SELECT fulfillment_batch_date, fulfillment_batch_week
+                    				  FROM fulfillment_batch_week
+                    				  WHERE to_days( fulfillment_batch_date )  >= to_days(" + compareDate + @")
+                    			      ORDER  BY fulfillment_batch_date ASC
+                    				  LIMIT 1";
+                command.ExecuteNonQuery();
+
+                DataTable batch_week = new DataTable();
+
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command))
+                {
+                    da.Fill(batch_week);
+
+                }
+
+                return batch_week;
+            }
+
+            catch (Exception e)
+            {
+                
+                Console.WriteLine(e.Message);
+                return null;
+            }
+
         }
     }
 
