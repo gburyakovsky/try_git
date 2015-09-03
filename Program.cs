@@ -2503,19 +2503,21 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+
                 int num = number.ToString().Substring(number.ToString().IndexOf(".") + 1).Length;
-                
+
                 if (number.ToString().IndexOf(".") != -1 && num > precision)
                 {
-                   
-                    number = Convert.ToDouble(number.ToString().Substring(0,number.ToString().IndexOf(".")+1+1+precision));
+                    number =
+                        Convert.ToDouble(number.ToString()
+                            .Substring(0, number.ToString().IndexOf(".") + 1 + 1 + precision));
 
-                    if (Convert.ToInt32(number.ToString().Substring(number.ToString().Length-1))>=5)
+                    if (Convert.ToInt32(number.ToString().Substring(number.ToString().Length - 1)) >= 5)
                     {
                         if (precision > 1)
                         {
                             string numbr = number.ToString().Substring(0, number.ToString().Length - 1).ToString();
-                            string rep = new String('0', precision-1);
+                            string rep = new String('0', precision - 1);
                             string zero = "0.";
                             string one = "1";
                             string combine = zero + rep + one;
@@ -2534,14 +2536,13 @@ namespace BlueDolphin.Renewal
                             number =
                                 Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString()) +
                                 1;
-
                         }
 
                     }
                     else
                     {
                         number =
-                            Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString());
+                            Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length).ToString());
 
                     }
 
