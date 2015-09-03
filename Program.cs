@@ -12,6 +12,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Remoting;
 using System.Web;
 using System.Web.UI.HtmlControls;
 using MySql.Data;
@@ -1787,7 +1788,7 @@ namespace BlueDolphin.Renewal
                     renewal_order_subtotal["class"] = "ot_subtotal";
                     renewal_order_subtotal["sort_order"] = "1";
 
-                    queryString=tep_db_perform("orders_total", renewal_order_subtotal);
+                    queryString = tep_db_perform("orders_total", renewal_order_subtotal);
                     command4 = new MySqlCommand(queryString, myConn);
                     command4.ExecuteNonQuery();
 
@@ -2309,10 +2310,112 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+                string val;
+
                 if (action == "insert")
                 {
                     query = "insert into " + table + "(";
+
+                    foreach (KeyValuePair<string, object> col in data)
+                    {
+
+                        query += col.Key + ", ";
+
+                    }
+
+                    query = query.Substring(0, query.Length - 2) + ") values (";
+
+                    foreach (KeyValuePair<string, object> col in data)
+                    {
+                        val = col.Value.ToString();
+
+                        switch (val)
+                        {
+                            case "null":
+                                query += "null, ";
+                                break;
+                            default:
+                            //if there is a function related to now(), assume it doesn't need
+                            //quotes.
+
+                                if (val.Contains("now()")==false)
+                                {
+                                    query += "\'" + val.Replace("'", "\\'") + "\', ";
+                                }
+                                else
+                                {
+                                    query += val.Replace("'", "\\'") + ", ";
+
+                                }
+                                break;
+                        }
+
+                    }
+
+                    query += query.Substring(0, query.Length - 2) + ")";
+
                 }
+                else if (action == "replace")
+                {
+
+                    query = "replace into " + table + " (";
+
+                    foreach (KeyValuePair<string, object> col in data)
+                    {
+
+                        query += col.Key + ", ";
+                    }
+
+                    query = query.Substring(0, query.Length - 2) + ") values (";
+
+                    foreach (KeyValuePair<string, object> col in data)
+                    {
+                        val = col.Value.ToString();
+
+                        switch (val)
+                        {
+                            case "now()":
+                                query += "now(), ";
+                                break;
+                            case "null":
+                                query += "null, ";
+                                break;
+                            default:
+                                query += "\'" + val.Replace("'", "\\'") + "\', ";
+                                break;
+                        }
+
+                    }
+
+                    query += query.Substring(0, query.Length - 2) + ")";
+
+                }
+                else if (action == "update")
+                {
+                    query = "update " + table + " set ";
+
+                    foreach (KeyValuePair<string, object> col in data)
+                    {
+                        val = col.Value.ToString();
+
+                        switch (val)
+                        {
+                            case "now()":
+                                query += col.Key + " = now(), ";
+                                break;
+                            case "null":
+                                query += col.Key + "= null, ";
+                                break;
+                            default:
+                                query += col.Key + " = \'" + val.Replace("'", "\\'") + "\', ";
+                                break;
+                        }
+
+                    }
+
+                    query += query.Substring(0, query.Length - 2) + " where " + parameters;
+                }
+
                 return query;
             }
             catch (Exception e)
