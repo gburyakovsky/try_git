@@ -2346,7 +2346,7 @@ namespace BlueDolphin.Renewal
                             //if there is a function related to now(), assume it doesn't need
                             //quotes.
 
-                                if (val.Contains("now()")==false)
+                                if (val.IndexOf("now()")==-1)
                                 {
                                     query += "\'" + val.Replace("'", "\\'") + "\', ";
                                 }
@@ -2439,13 +2439,16 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+                string currency_format = string.Empty;
+
                 //get the currencies
                 var results = (from m in currencies.AsEnumerable()
                                where m.Field<string>("code") == currency_type
                                select m).FirstOrDefault();
 
+                currency_format = results["symbol_left"].ToString() + results["value"].ToString();
 
-                return currencies.ToString();
+                return currency_format;
 
 
             }
@@ -2493,6 +2496,63 @@ namespace BlueDolphin.Renewal
                 return null;
             }
 
+        }
+
+        // Wrapper function for round()
+        private static double tep_round(double number, int precision)
+        {
+            try
+            {
+                int num = number.ToString().Substring(number.ToString().IndexOf(".") + 1).Length;
+                
+                if (number.ToString().IndexOf(".") != -1 && num > precision)
+                {
+                   
+                    number = Convert.ToDouble(number.ToString().Substring(0,number.ToString().IndexOf(".")+1+1+precision));
+
+                    if (Convert.ToInt32(number.ToString().Substring(number.ToString().Length-1))>=5)
+                    {
+                        if (precision > 1)
+                        {
+                            string numbr = number.ToString().Substring(0, number.ToString().Length - 1).ToString();
+                            string rep = new String('0', precision-1);
+                            string zero = "0.";
+                            string one = "1";
+                            string combine = zero + rep + one;
+                            number =
+                                Convert.ToDouble(numbr) + Convert.ToDouble(combine);
+                        }
+                        else if (precision == 1)
+                        {
+                            number =
+                                Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString()) +
+                                0.1;
+
+                        }
+                        else
+                        {
+                            number =
+                                Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString()) +
+                                1;
+
+                        }
+
+                    }
+                    else
+                    {
+                        number =
+                            Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString());
+
+                    }
+
+                }
+                return number;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return 0;
+            }
         }
     }
 
