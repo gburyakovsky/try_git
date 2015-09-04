@@ -2446,7 +2446,11 @@ namespace BlueDolphin.Renewal
                                where m.Field<string>("code") == currency_type
                                select m).FirstOrDefault();
 
-                currency_format = results["symbol_left"].ToString() + results["value"].ToString();
+                string getRoundedNum = tep_round(Convert.ToDouble(number)*Convert.ToInt32(results["value"]),
+                    Convert.ToInt32(results["decimal_places"])).ToString();
+
+                currency_format = results["symbol_left"].ToString() +
+                                   getRoundedNum+ results["symbol_right"].ToString(); //results["value"].ToString();
 
                 return currency_format;
 
@@ -2503,21 +2507,19 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
+                
                 int num = number.ToString().Substring(number.ToString().IndexOf(".") + 1).Length;
-
+                
                 if (number.ToString().IndexOf(".") != -1 && num > precision)
                 {
-                    number =
-                        Convert.ToDouble(number.ToString()
-                            .Substring(0, number.ToString().IndexOf(".") + 1 + 1 + precision));
+                    number = Convert.ToDouble(number.ToString().Substring(0,number.ToString().IndexOf(".")+1+1+precision));
 
-                    if (Convert.ToInt32(number.ToString().Substring(number.ToString().Length - 1)) >= 5)
+                    if (Convert.ToInt32(number.ToString().Substring(number.ToString().Length-1))>=5)
                     {
                         if (precision > 1)
                         {
                             string numbr = number.ToString().Substring(0, number.ToString().Length - 1).ToString();
-                            string rep = new String('0', precision - 1);
+                            string rep = new String('0', precision-1);
                             string zero = "0.";
                             string one = "1";
                             string combine = zero + rep + one;
