@@ -800,6 +800,12 @@ namespace BlueDolphin.Renewal
             try
             {
 
+                /*   global $is_gc_order;
+	                //for windows we need to use the functions. On Unix this is compiled in.
+	                if (IS_UNIX_ENVIRONMENT == 'false') {
+		                include('php_pfpro.php');
+	                }*/
+
                 //make sure we have sent them renewalinvoices
                 //eg IF orderItem.renewal_invoices_sent > 0 THEN
                 //
@@ -887,6 +893,91 @@ namespace BlueDolphin.Renewal
                     //if the expiration date is expired, we should increase by 1 year.
                     cc_expires_year = cc_expires.Substring(2, 2);
                     cc_expires_month = cc_expires.Substring(0, 2);
+
+                    int n;
+                    bool isNumeric = int.TryParse(cc_expires_year, out n);
+
+                    // Check to make sure our month and year are numeric.
+                    if (!isNumeric)
+                    {
+                        cc_expires_year = DateTime.Now.Year.ToString();
+                    }
+
+                    isNumeric = int.TryParse(cc_expires_month, out n);
+
+                    if (!isNumeric)
+                    {
+
+                        cc_expires_month = DateTime.Now.Month.ToString();
+                    }
+
+                    // Check if our month is less than one. If so than make it 01.
+                    if (Convert.ToInt32(cc_expires_month) < 1)
+                    {
+                        cc_expires_month = "01";
+                    }
+
+                    // Check if our month is greater than twelve. If so than make it 12.
+                    if (Convert.ToInt32(cc_expires_month) > 12)
+                    {
+                        cc_expires_month = "12";
+                    }
+
+                    /* FORMER DATE MODS. Replaced in September 2012 (MCS)
+				// Check to see if our year is less than our current year. If so set to our current year.
+				if ($cc_expires_year < date('y')) {
+					$cc_expires_year = date('y');
+				}
+
+				// Check to see if our year is 10 greater than our current year. If so set to our current year.
+				if ($cc_expires_year > (date('y') + 10))
+				{
+					$cc_expires_year = date('y');
+				}
+
+				// Finally if it is our current year and our month is less than our current month than add one to our year.
+				if (($cc_expires_year == date('y')) && ($cc_expires_month < date('m'))) {
+					$cc_expires_year++;
+				}
+
+				// Add one less then our current attempt to the expiration year.
+				// We do this to increment our expiuration year by one for each attempt
+				// accept for our first attempt. We will not store this expiration date
+				// unless we succeed in charging the consumer.
+				$cc_expires_year += ($renewals_credit_card_charge_attempts - 1);
+		// END FORMER DATE MODS.*/
+
+                    /* NEW DATE MODS. September 2012 (MCS) */
+                    // If original expiration date failed in first charge attempt
+                    if (renewals_expiration_date_failures == 1)
+                    {
+                        if (is_date_stale(cc_expires_month, cc_expires_year))
+                        {
+                            
+                            cc_expires_year = (Convert.ToInt32(cc_expires_year) + 3).ToString();
+                        }
+                        if (is_date_stale(cc_expires_month, cc_expires_year))
+                        {
+
+                            cc_expires_year = DateTime.Now.Year.ToString();
+                        }
+                      
+                    }
+                    // If modified expiration date failed in second charge attempt
+                    if (renewals_expiration_date_failures == 2)
+                    {
+                        if (is_date_stale(cc_expires_month, cc_expires_year))
+                        {
+
+                            cc_expires_year = (Convert.ToInt32(cc_expires_year) + 2).ToString();
+                        }
+                        if (is_date_stale(cc_expires_month, cc_expires_year))
+                        {
+
+                            cc_expires_year = (DateTime.Now.Year+1).ToString();
+                        }
+
+                    }
 
                 }
 
@@ -2564,6 +2655,30 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return 0;
             }
+        }
+
+        // For expiration dates. Added September 2012 (MCS)
+        private static bool is_date_stale(string exp_month, string exp_year)
+        {
+            try
+            {
+                bool stale = false;
+
+                double t1 =
+                    DateTime.Parse("1/" + exp_month + "/" + exp_year).Subtract(new DateTime(1970, 2, 1)).TotalSeconds;
+                string t2 = DateTime.Parse("2" + "/1/" + "1970").AddSeconds(t1).ToString("dd/MM/yyyy");
+                double t3 = DateTime.Parse(t2).Subtract(new DateTime(1970, 2, 1)).TotalSeconds;
+                stale =  DateTime.Now.Subtract(new DateTime(1970, 2, 1)).TotalSeconds - t3 > 0 ? true : false;
+
+                return stale;
+            }
+            catch (Exception e)
+            {
+                
+                Console.WriteLine(e.Message);
+                return false;
+            }
+
         }
     }
 
