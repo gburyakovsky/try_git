@@ -13,6 +13,7 @@ using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Remoting;
+using System.Globalization;
 using System.Web;
 using System.Web.UI.HtmlControls;
 using MySql.Data;
@@ -2446,15 +2447,22 @@ namespace BlueDolphin.Renewal
                                where m.Field<string>("code") == currency_type
                                select m).FirstOrDefault();
 
+                string decimalPoint = results["decimal_point"].ToString();
+                string thousandsPoint = results["thousands_point"].ToString();
+                string decimalPlaces = new String('0', Convert.ToInt32(results["decimal_places"]));
+
                 string getRoundedNum = tep_round(Convert.ToDouble(number)*Convert.ToInt32(results["value"]),
                     Convert.ToInt32(results["decimal_places"])).ToString();
 
+                getRoundedNum = Convert.ToDecimal(getRoundedNum).ToString("#,##0." + decimalPlaces);
+                getRoundedNum = getRoundedNum.Replace(",", thousandsPoint);
+                int lastDecimal = Convert.ToInt32(getRoundedNum.LastIndexOf("."));
+                getRoundedNum = getRoundedNum.Remove(lastDecimal, 1).Insert(lastDecimal, decimalPoint);
+
                 currency_format = results["symbol_left"].ToString() +
-                                   getRoundedNum+ results["symbol_right"].ToString(); //results["value"].ToString();
+                                   getRoundedNum+ results["symbol_right"].ToString();
 
                 return currency_format;
-
-
             }
             catch (Exception e)
             {
