@@ -2759,6 +2759,33 @@ namespace BlueDolphin.Renewal
             }
 
         }
+
+        private static string get_key(string ky)
+        {
+            try
+            {
+                // step 1, calculate MD5 hash from input
+                System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create();
+                byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(ky);
+                byte[] hash = md5.ComputeHash(inputBytes);
+
+                // step 2, convert byte array to hex string
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < hash.Length; i++)
+                {
+                    sb.Append(hash[i].ToString("X2"));
+                }
+                return sb.ToString();
+
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
         private static string get_pfp_pwd()
         {
 
