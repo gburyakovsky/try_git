@@ -117,6 +117,12 @@ namespace BlueDolphin.Renewal
         public static string DEFAULT_ORDERS_STATUS_ID = "null";
         public static string RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = "0";
         public static string DEFAULT_RENEWAL_CHARGE_DAYS = "0";
+        public static string MODULE_PAYMENT_PAYFLOWPRO_USER = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_VENDOR = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_PARTNER = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_TENDER = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_PWD = string.Empty;
 
         //the following are defined in renewal_track_emails table.
         public static string TRACK1 = "1014";
@@ -227,7 +233,7 @@ namespace BlueDolphin.Renewal
         private static string compare_date;
         private static string check_renewal_order_result;
         private static bool is_gc_order;
-        
+        private static string Key = "W1j Witt3 Wy4en W1l13n W3l Warm3 Woll$n WiNter W4nt3n Wa553n";
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -241,6 +247,7 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> renewal_order_subtotal;
         private static Dictionary<string, object> fulfillment_batch_week;
         private static Dictionary<string, object> sql_data_array;
+        private static Dictionary<string, object> transaction;
         private static List<string> orders_columns;
         private static List<string> orders_products_columns;
         //private static Dictionary<string, object> renewels_billing_series_array;
@@ -1034,43 +1041,46 @@ namespace BlueDolphin.Renewal
                     string billing_country_name = countries_array[billing_country].ToString();
                     string is_gc_order_returned = (is_gc_order == true) ? "True" : "False";
 
+                    transaction = new Dictionary<string, object>();
+
+                    transaction["USER"] = MODULE_PAYMENT_PAYFLOWPRO_USER.Trim();
+                    transaction["VENDOR"] = MODULE_PAYMENT_PAYFLOWPRO_VENDOR.Trim();
+                    transaction["PARTNER"] = MODULE_PAYMENT_PAYFLOWPRO_PARTNER.Trim();
+                    transaction["PWD"] = get_pfp_pwd().Trim();
+                    transaction["TRXTYPE"] = MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE.Trim();
+                    transaction["TENDER"] = MODULE_PAYMENT_PAYFLOWPRO_TENDER.Trim();
+                    transaction["AMT"] = final_price.ToString("#,##0.00");
+                    transaction["ACCT"] = decrypt_cc(Convert.ToInt32(cc_number), customers_id).Substring(0, 19);
+                    transaction["EXPDATE"] = cc_expires;
+                    transaction["FREIGHTAMT"] = "";
+                    transaction["TAXAMT"] = "";
+                    transaction["FIRSTNAME"] = billing_first_name;
+                    transaction["LASTNAME"] = billing_last_name;
+                    transaction["STREET"] = billing_address;
+                    transaction["CITY"] = billing_city;
+                    transaction["STATE"] = billing_state;
+                    transaction["ZIP"] = billing_postcode;
+                    transaction["COUNTRY"] = billing_country_name;
+                    transaction["EMAIL"] = email_address;
+                    transaction["IS_GC_ORDER"] = is_gc_order_returned;
+                    transaction["SHIPTOFIRSTNAME"] = "";
+                    transaction["SHIPTOLASTNAME"] = "";
+                    transaction["SHIPTOSTREET"] = "";
+                    transaction["SHIPTOCITY"] = "";
+                    transaction["SHIPTOSTATE"] = "";
+                    transaction["SHIPTOZIP"] = "";
+                    transaction["CVV2"] = "";
+                    transaction["COMMENT1"] = cc_transactions_id;
+                    transaction["ORDERSOURCE"] = "Recurring";
+                    transaction["CCTRANSACTIONID"] = cc_transactions_id;
+                    transaction["REPORTGROUP"] = get_merchant_processor_reporting_group(skinsites_id);
+                    transaction["L_BDESCRIP_OVERRIDE"] = override_renewal_billing_descriptor; 
 
                 }
 
                 myReader.Close();
 
-                /* var transaction = new Dictionary<string, string>();
-
-                            transaction["USER"] = "";
-                            transaction["VENDOR"] = "";
-                            transaction["PARTNER"] = "";
-                            transaction["PWD"] = "";
-                            transaction["TRXTYPE"] = "";
-                            transaction["USER"] = "";
-                            transaction["VENDOR"] = "";
-                            transaction["PARTNER"] = "";
-                            transaction["PWD"] = "";
-                            transaction["TRXTYPE"] = "";
-                            transaction["USER"] = "";
-                            transaction["VENDOR"] = "";
-                            transaction["PARTNER"] = "";
-                            transaction["PWD"] = "";
-                            transaction["TRXTYPE"] = "";
-                            transaction["USER"] = "";
-                            transaction["VENDOR"] = "";
-                            transaction["PARTNER"] = "";
-                            transaction["PWD"] = "";
-                            transaction["TRXTYPE"] = "";
-                            transaction["USER"] = "";
-                            transaction["VENDOR"] = "";
-                            transaction["PARTNER"] = "";
-                            transaction["PWD"] = "";
-                            transaction["TRXTYPE"] = "";
-                            transaction["USER"] = "";
-                            transaction["VENDOR"] = "";
-                            transaction["PARTNER"] = "";
-                            transaction["PWD"] = "";
-                            transaction["TRXTYPE"] = ""; */
+                         
 
                 return number_of_renewal_charged;
             }
@@ -2719,6 +2729,139 @@ namespace BlueDolphin.Renewal
 
                 Console.WriteLine(e.Message);
                 return false;
+            }
+
+        }
+
+        private static string get_key()
+        {
+            try
+            {
+                // step 1, calculate MD5 hash from input
+                System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create();
+                byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(Key);
+                byte[] hash = md5.ComputeHash(inputBytes);
+
+                // step 2, convert byte array to hex string
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < hash.Length; i++)
+                {
+                    sb.Append(hash[i].ToString("X2"));
+                }
+                return sb.ToString();
+
+            }
+            catch(Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
+        private static string get_pfp_pwd()
+        {
+
+            try
+            {
+                string key = get_key();
+                string input = MODULE_PAYMENT_PAYFLOWPRO_PWD;
+                input = input.Replace("\n", "");
+                input = input.Replace("\t", "");
+                input = input.Replace("\r", "");
+
+                input = input.Trim();
+	           /*    $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
+	            $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
+	            $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
+	            mcrypt_generic_init ($td, $key, $iv);
+	            $decrypted_data = mdecrypt_generic ($td, $input);
+	            mcrypt_generic_deinit ($td);
+	            mcrypt_module_close ($td);
+	            return trim(chop($decrypted_data)); */
+
+                return key;
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
+
+
+        //$input - stuff to decrypt
+        //$key - the secret key to use
+        private static string decrypt_cc(int input, int customer_id)
+        {
+
+            try
+            {
+                string key = get_key();
+                string input2 = input.ToString();
+                input2 = input2.Replace("\n", "");
+                input2 = input2.Replace("\t", "");
+                input2 = input2.Replace("\r", "");
+
+                input2 = input2.Trim();
+                /*    $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
+                 $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
+                 $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
+                 mcrypt_generic_init ($td, $key, $iv);
+                 $decrypted_data = mdecrypt_generic ($td, $input);
+                 mcrypt_generic_deinit ($td);
+                 mcrypt_module_close ($td);
+                 return trim(chop($decrypted_data)); */
+
+                return key;
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
+
+        private static string get_merchant_processor_reporting_group(int skinsitesId)
+        {
+            try
+            {
+                string ssId = skinsitesId.ToString().Replace("'", "\\'");
+                string qur = "select merchant_processor_reporting_group from " + TABLE_SKINSITES + " where skinsites_id = '" + ssId + "' ";
+
+                // Build query to retireve merchant processor reporting group.
+                command = new MySqlCommand(qur, myConn);
+                command.ExecuteNonQuery();
+
+                  MySqlDataReader myReader;
+                  myReader = command.ExecuteReader();
+                
+                if(myReader.HasRows){
+
+                    while(myReader.Read())
+                    {
+                        return myReader["merchant_processor_reporting_group"].ToString();
+                    }
+
+                }
+                else{
+
+                    return "";
+                }
+
+                return "";
+            }
+
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return e.Message;
+
             }
 
         }
