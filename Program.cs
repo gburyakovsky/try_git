@@ -225,7 +225,6 @@ namespace BlueDolphin.Renewal
         private static string billing_postcode;
         private static string template_directory;
         private static string billing_country;
-        private static string response;
         private static DateTime date_sent;
         private static string override_renewal_billing_descriptor;
         private static string products_billing_descriptor;
@@ -242,6 +241,8 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
         private static Dictionary<string, object> zones;
+        private static Dictionary<string, object> resp;
+        private static Dictionary<string, object> response;
         //private static Dictionary<string, object> currencies;
         private static Dictionary<object, object> configuration;
         private static Dictionary<string, object> renewal_order; //= new Dictionary<string, object>();
@@ -1097,7 +1098,7 @@ namespace BlueDolphin.Renewal
 
                     debug(transaction, "tansaction");
                     Environment.SetEnvironmentVariable("PFPRO_CERT_PATH=", MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV, EnvironmentVariableTarget.Machine);
-
+                    response = new Dictionary<string, object>();
                     response = pfpro_process(transaction,MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
 
 
@@ -2859,13 +2860,13 @@ namespace BlueDolphin.Renewal
         }
 
 
-        private static string pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
+        private static Dictionary<string, object> pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
                                   string proxy_url = "", string proxy_port = "", string proxy_logon = "",
                                   string proxy_password = "")
         {
             try
             {
-                string resp = string.Empty;
+                resp = new Dictionary<string, object>();
                 hostAddress = pfpro_defaulthost;
                 port = pfpro_defaultport;
                 timeout = pfpro_defaulttimeout;
@@ -2884,7 +2885,7 @@ namespace BlueDolphin.Renewal
             {
 
                 Console.WriteLine(e.Message);
-                return e.Message;
+                return null;
             }
 
         }
