@@ -123,6 +123,15 @@ namespace BlueDolphin.Renewal
         public static string MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_TENDER = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PWD = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = string.Empty;
+        public static string MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS = string.Empty;
+        private static string pfpro_defaultport = string.Empty;
+        private static string pfpro_defaulttimeout = string.Empty;
+        private static string pfpro_proxyaddress = string.Empty;
+        private static string pfpro_proxyport = string.Empty;
+        private static string pfpro_proxylogin = string.Empty;
+        private static string pfpro_proxypassword = string.Empty;
+        private static string pfpro_defaulthost = string.Empty;
 
         //the following are defined in renewal_track_emails table.
         public static string TRACK1 = "1014";
@@ -223,6 +232,7 @@ namespace BlueDolphin.Renewal
         private static string billing_postcode;
         private static string template_directory;
         private static string billing_country;
+        private static string response;
         private static DateTime date_sent;
         private static string override_renewal_billing_descriptor;
         private static string products_billing_descriptor;
@@ -234,6 +244,7 @@ namespace BlueDolphin.Renewal
         private static string check_renewal_order_result;
         private static bool is_gc_order;
         private static string Key = "W1j Witt3 Wy4en W1l13n W3l Warm3 Woll$n WiNter W4nt3n Wa553n";
+        private static string suffix;
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -256,8 +267,8 @@ namespace BlueDolphin.Renewal
         private static DataTable skinsites;
         private static DataTable skinsites_configuration_defines;
         private static DataTable currencies;
+        private static DataTable config_values;
         private static DataTable getFulfillmentBatchWeek = null;
-
 
         /// <summary>
         /// 
@@ -1074,7 +1085,27 @@ namespace BlueDolphin.Renewal
                     transaction["ORDERSOURCE"] = "Recurring";
                     transaction["CCTRANSACTIONID"] = cc_transactions_id;
                     transaction["REPORTGROUP"] = get_merchant_processor_reporting_group(skinsites_id);
-                    transaction["L_BDESCRIP_OVERRIDE"] = override_renewal_billing_descriptor; 
+                    transaction["L_BDESCRIP_OVERRIDE"] = override_renewal_billing_descriptor;
+
+                    //setup the line items specific to First Data
+                    suffix = "1";
+                    transaction["L_QTY" + suffix] = myReader["products_quantity"];
+                    transaction["L_COMMCODE" + suffix] = "";
+                    transaction["L_DESC" + suffix] = myReader["products_name"];
+                    transaction["L_BDESCRIP" + suffix] = myReader["products_billing_descriptor"];
+                    transaction["L_UOM" + suffix] = "";
+                    transaction["L_COST" + suffix] = Convert.ToDouble(myReader["products_price"]).ToString("#,##0.00");
+                    transaction["L_PRODCODE" + suffix] = myReader["products_model"];
+                    transaction["L_DISCOUNT" + suffix] = "";
+                    transaction["L_AMT" + suffix] = final_price.ToString("#,##0.00");
+                    transaction["L_TAXAMT" + suffix] = Convert.ToDouble(myReader["products_tax"]).ToString("#,##0.00");
+
+                    debug(transaction, "tansaction");
+                    Environment.SetEnvironmentVariable("PFPRO_CERT_PATH=", MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV, EnvironmentVariableTarget.Machine);
+
+                    response = pfpro_process(transaction,MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
+
+
 
                 }
 
@@ -2796,8 +2827,9 @@ namespace BlueDolphin.Renewal
                 input = input.Replace("\n", "");
                 input = input.Replace("\t", "");
                 input = input.Replace("\r", "");
-
                 input = input.Trim();
+                byte[] bites = System.Convert.FromBase64String(input);
+                input = System.Text.Encoding.UTF8.GetString(bites);
 	           /*    $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
 	            $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
 	            $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
@@ -2831,8 +2863,9 @@ namespace BlueDolphin.Renewal
                 input2 = input2.Replace("\n", "");
                 input2 = input2.Replace("\t", "");
                 input2 = input2.Replace("\r", "");
-
                 input2 = input2.Trim();
+                byte[] bites = System.Convert.FromBase64String(input2);
+                input2 = System.Text.Encoding.UTF8.GetString(bites);
                 /*    $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
                  $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
                  $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
@@ -2889,6 +2922,55 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return e.Message;
 
+            }
+
+        }
+
+
+        private static string pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
+                                  string proxy_url = "", string proxy_port = "", string proxy_logon = "",
+                                  string proxy_password = "")
+        {
+            try
+            {
+                string resp = string.Empty;
+                hostAddress = pfpro_defaulthost;
+                port = pfpro_defaultport;
+                timeout = pfpro_defaulttimeout;
+                proxy_url = pfpro_proxyaddress;
+                proxy_port = pfpro_proxyport;
+                proxy_logon = pfpro_proxylogin;
+                proxy_password = pfpro_proxypassword;
+
+
+                if (transaction.Count == 0)
+                    return null;
+
+                return resp;
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
+
+        private static DataTable get_configuration_values()
+        {
+            try
+            {
+                config_values = null;
+
+                return config_values;
+
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return null;
             }
 
         }
