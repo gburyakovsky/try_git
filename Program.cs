@@ -23,7 +23,6 @@ namespace BlueDolphin.Renewal
 {
     internal class BlueDolphinRenewal
     {
-
         //debug variable
         public static bool Debug = true;
 
@@ -62,10 +61,8 @@ namespace BlueDolphin.Renewal
         public static string TABLE_PRODUCTS_NOTIFICATIONS = "products_notifications";
         public static string TABLE_PRODUCTS_OPTIONS = "products_options";
         public static string TABLE_PRODUCTS_OPTIONS_VALUES = "products_options_values";
-
         public static string TABLE_PRODUCTS_OPTIONS_VALUES_TO_PRODUCTS_OPTIONS =
             "products_options_values_to_products_options";
-
         public static string TABLE_PRODUCTS_TO_CATEGORIES = "products_to_categories";
         public static string TABLE_REVIEWS = "reviews";
         public static string TABLE_REVIEWS_DESCRIPTION = "reviews_description";
@@ -99,14 +96,11 @@ namespace BlueDolphin.Renewal
         public static string TABLE_PUBLICATION_FREQUENCY = "publication_frequency";
         public static string TABLE_CC_TRANSACTIONS_ORDERS = "cc_transactions_orders";
         public static string TABLE_ORDERS_FULFILLMENT_BATCH_HISTORY = "orders_fulfillment_batch_history";
-
-
         public static bool USE_PCONNECT = false; // use persistent connections?
         public static string DEFAULT_PENDING_COMMENT = "Renewal Order has been created.";
         public static string CHARSET = "iso-8859-1";
         public static string FULFILLMENT_FULFILL_ID = "1";
         public static string FULFILLMENT_CHANGE_ADDRESS_ID = "2";
-
         public static string FULFILLMENT_CANCEL_ID = "3";
         public static string FULFILLMENT_IGNORE_FULFILLMENT_ID = "4";
         public static string PAPER_INVOICE_DATE_FORMAT = "Ymd_His";
@@ -132,7 +126,9 @@ namespace BlueDolphin.Renewal
         private static string pfpro_proxylogin = string.Empty;
         private static string pfpro_proxypassword = string.Empty;
         private static string pfpro_defaulthost = string.Empty;
-
+        private static string PFPRO_EXE_PATH = string.Empty;
+        private static string LD_LIBRARY_PATH_ENV = string.Empty;
+        private static string PFPRO_CERT_PATH_ENV = string.Empty;
         //the following are defined in renewal_track_emails table.
         public static string TRACK1 = "1014";
         public static string TRACK2_BAD_CC = "1015";
@@ -154,13 +150,10 @@ namespace BlueDolphin.Renewal
         private static int orders_status;
         private static string skus_type;
         private static int skus_type_order_period;
-
         /// <summary>
         /// Variables
         /// </summary>
-
         private static string renewal_skus_type_order_period = string.Empty;
-
         private static bool update_orders_fulfillment_status_id;
         private static int skus_status;
         private static int skus_type_order;
@@ -1108,7 +1101,6 @@ namespace BlueDolphin.Renewal
                     response = pfpro_process(transaction,MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
 
 
-
                 }
 
                 myReader.Close();
@@ -1741,7 +1733,6 @@ namespace BlueDolphin.Renewal
                                                  ". Only Pending orders are valid.";
                 }
 
-
                 // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
                 if (prior_orders_id.ToString() != "")
                 {
@@ -2022,7 +2013,6 @@ namespace BlueDolphin.Renewal
 
                 //countries table, for each country name give us the country code.
 
-
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "select * from countries";
                 command.ExecuteNonQuery();
@@ -2145,69 +2135,9 @@ namespace BlueDolphin.Renewal
 
                 }
 
-                /*   MySqlDataReader myReader7;
-                   myReader7 = command7.ExecuteReader();
-                   int num_records2 = 0; //Convert.ToInt32(command7.ExecuteScalar());
-
-                   while (myReader7.Read())
-                   {
-                       num_records2++;
-                   }
-                
-                   myReader7.Close();
-                   myReader7 = command7.ExecuteReader();
-
-                   renewels_billing_series_array = new Dictionary<string, object>();
-
-                   int j = 0;
-
-                   while (myReader7.Read())
-                   {
-                       renewels_billing_series_array.Add("renewals_billing_series_id", myReader7["renewals_billing_series_id"]);
-                       renewels_billing_series_array.Add("effort_number", myReader7["effort_number"]);
-                       renewels_billing_series_array.Add("delay_in_days", myReader7["delay_in_days"]);
-                       renewels_billing_series_array.Add("renewals_billing_series_name", myReader7["renewals_billing_series_name"]);
-                       renewels_billing_series_array.Add("renewals_invoices_type", myReader7["renewals_invoices_type"]);
-                       renewels_billing_series_array.Add("renewals_invoices_email_name", myReader7["renewals_invoices_email_name"]);
-                       j++;
-
-                   }
-
-                   myReader7.Close(); */
-
                 command8 = new MySqlCommand(string.Empty, myConn);
                 command8.CommandText = @"select * from skinsites";
                 command8.ExecuteNonQuery();
-
-                /*  MySqlDataReader myReader8;
-                
-                  myReader8 = command8.ExecuteReader();
-                  int num_records3 = 0; //Convert.ToInt32(command8.ExecuteScalar());
-
-                  while (myReader8.Read())
-                  {
-                      num_records3++;
-                  }
-
-                  myReader8.Close();
-                  myReader8 = command8.ExecuteReader();
-
-                  //skinsites = new Dictionary<string, object>();
-
-                  int q = 0;
-
-                  while (myReader8.Read())
-                  {
-                      for (int skin = 0; skin < myReader8.FieldCount; skin++)
-                      {
-                          skinsites.Add(myReader8.GetName(skin), myReader8.GetValue(skin));
-                      }
-
-                      q++;
-                  }
-
-                  myReader8.Close();
-                  */
 
                 skinsites = new DataTable();
 
@@ -3001,11 +2931,20 @@ namespace BlueDolphin.Renewal
                 MODULE_PAYMENT_PAYFLOWPRO_TENDER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TENDER" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_PWD = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PWD" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
-               
-                pfpro_defaulthost = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
 
+                pfpro_defaulthost = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
+                pfpro_defaultport = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTPORT" select (string)dr["configuration_value"]).FirstOrDefault();
+                pfpro_defaulttimeout = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TIMEOUT" select (string)dr["configuration_value"]).FirstOrDefault();
+                pfpro_proxyaddress = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_ADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
+                pfpro_proxyport = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_PORT" select (string)dr["configuration_value"]).FirstOrDefault();
+                pfpro_proxylogin = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_LOGON" select (string)dr["configuration_value"]).FirstOrDefault();
+                pfpro_proxypassword = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_PASSWORD" select (string)dr["configuration_value"]).FirstOrDefault();
+                PFPRO_EXE_PATH = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_EXE_PATH_D" select (string)dr["configuration_value"]).FirstOrDefault();
+                LD_LIBRARY_PATH_ENV = "LD_LIBRARY_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_LD_LIBRARY_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
+                PFPRO_CERT_PATH_ENV = "PFPRO_CERT_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
 
             }
+
             catch (Exception e)
             {
 
