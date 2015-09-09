@@ -305,6 +305,8 @@ namespace BlueDolphin.Renewal
                 myConn.Open();
 
                 set_all_defines();
+                config_values = get_configuration_values();
+                set_config_values(config_values);
 
                 //set up logging of script to file
 
@@ -2961,9 +2963,19 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-                config_values = null;
+                 DataTable configuration_values = null;
+                 command = new MySqlCommand("select configuration_key, configuration_value from configuration", myConn);
+                 command.ExecuteNonQuery();
+                 configuration_values = new DataTable();
+                 using (MySqlDataAdapter da = new MySqlDataAdapter(command))
+                 {
+                     da.Fill(configuration_values);
 
-                return config_values;
+                 }
+
+                
+
+                return configuration_values;
 
             }
             catch (Exception e)
@@ -2972,6 +2984,35 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return null;
             }
+
+        }
+
+        private static void set_config_values(DataTable config_dt)
+        {
+            try
+            {
+
+                DEFAULT_ORDERS_STATUS_ID = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_ORDERS_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault();
+                RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_USER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_USER" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_VENDOR = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_VENDOR" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_PARTNER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PARTNER" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_TENDER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TENDER" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_PWD = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PWD" select (string)dr["configuration_value"]).FirstOrDefault();
+                MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
+               
+                pfpro_defaulthost = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
+
+
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+
+            }
+
 
         }
     }
