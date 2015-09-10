@@ -119,7 +119,12 @@ namespace BlueDolphin.Renewal
         public static string MODULE_PAYMENT_PAYFLOWPRO_PWD = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS = string.Empty;
-        public static string MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS = string.Empty;
+        public static int MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS;
+        public static int MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES;
+        public static int MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID;
+        public static int DEFAULT_RETRY_RENEWAL_CHARGE_DAYS;
+        public static string SEND_EMAILS;
+        public static string customer_notification;
         private static string pfpro_defaultport = string.Empty;
         private static string pfpro_defaulttimeout = string.Empty;
         private static string pfpro_proxyaddress = string.Empty;
@@ -142,7 +147,6 @@ namespace BlueDolphin.Renewal
         public static int number_of_renewal_invoices_created;
         public static int number_of_additional_renewal_invoices_created;
         public static int number_of_renewal_email_invoices_sent;
-
         public static int number_of_renewal_paper_invoices_file_records;
         public static int number_of_invoices_cleaned_up;
         public static int number_of_renewal_orders_mass_cancelled;
@@ -272,10 +276,8 @@ namespace BlueDolphin.Renewal
         /// </summary>
 
         //DatabaseTables dt = new DatabaseTables();
-
         public static string connectionString =
             ConfigurationManager.ConnectionStrings["databaseConnectionString"].ToString();
-
         public static MySqlConnection myConn = new MySqlConnection(connectionString);
         private static MySqlCommand command;
         private static MySqlCommand command2;
@@ -286,7 +288,6 @@ namespace BlueDolphin.Renewal
         private static MySqlCommand command7;
         private static MySqlCommand command8;
         private static MySqlCommand command9;
-
 
         private static void Main(string[] args)
         {
@@ -407,7 +408,6 @@ namespace BlueDolphin.Renewal
             {
 
                 Console.WriteLine(e.Message);
-
             }
 
         }
@@ -868,15 +868,12 @@ namespace BlueDolphin.Renewal
 	            ";
 
                 command = new MySqlCommand(charge_renewal_orders_query_string, myConn);
-
                 command.ExecuteNonQuery();
-
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
                 while (myReader.Read())
                 {
-
                     customers_id = Convert.ToInt32(myReader["customers_id"]);
                     orders_id = Convert.ToInt32(myReader["orders_id"]);
                     products_id = Convert.ToInt32(myReader["products_id"]);
@@ -1164,13 +1161,115 @@ namespace BlueDolphin.Renewal
                         {
                             renewals_credit_card_charge_attempts = MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS;
                         }
+                        // If there is an expiration date issue (added September 2012 - MCS):
+                        if (the_code == "305")
+                        {
+                            renewals_expiration_date_failures++;
+                            command5 = new MySqlCommand("update orders set renewals_expiration_date_failures = " + renewals_expiration_date_failures.ToString() + " where orders_id = '" + orders_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+                        }
+
+                        // If this was our last attempt than push into the next track otherwise queue it up for another try in the number of days specified by DEFAULT_RETRY_RENEWAL_CHARGE_DAYS in config.
+                        // Last attempt is defined if the max renewal cc charge attempts or the max expiration failures is reached, both defined in config.
+                        if (renewals_credit_card_charge_attempts >= MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS || renewals_expiration_date_failures >= MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES)
+                        {
+                            if (is_postcard_confirmation == 1)
+                            {// IS A POSTCARD CONFIRMATION
+
+                                //Change the billing series from 1014 to 1018.
+                                //first set the old billing series to in_progress=0 so these will be cleaned up, and set comments.
+                                command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments = 'Charging was not successful, putting the order in postcard track 2 (was 1014 now 1018)' where orders_id = '" + orders_id.ToString() + "'", myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+
+                                //next change the order's renewal_billing_series to 1018, renewal_invoices_created and renewal_invoices_sent to 0. This will
+                                //this will make sure the next time the orders get pulled for the next series.
+                                command5 = new MySqlCommand("update orders set renewals_billing_series_id = '" + TRACK2_PC + "', renewal_invoices_sent = 0, renewal_invoices_created=0 where orders_id = '" + orders_id.ToString() + "'", myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+
+                                //next change the order's renewal_billing_series to 1015, renewal_invoices_created and renewal_invoices_sent to 0. This will
+                                //this will make sure the next time the orders get pulled for the next series.
+                                command5 = new MySqlCommand("update orders set renewals_billing_series_id = '" + TRACK2_BAD_CC + "', renewal_invoices_sent = 0, renewal_invoices_created=0 where orders_id = '" + orders_id.ToString() + "'", myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+                            }
+                            else // IS NOT A POSTCARD CONFIRMATION
+                            {
+
+                                //Changing the billing series from 1014 to 1015.
+                                //first set the old billing series to in_progress=0 so these will be cleaned up. and set comments.
+                                command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments = 'Charging was not successful, putting the order in track 2 (was 1014 now 1015)' where orders_id = '" + orders_id.ToString() + "'", myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+
+                            }
+
+                            //update the order so it won't get pulled again.
+                            command5 = new MySqlCommand("update orders set renewal_transaction_date = null where orders_id = '" + orders_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+                        }
+                        else
+                        {
+                            // When setting the renewal_tranaction_date calculate as follows: Take the current date and time and
+                            // add the value from the configuration key RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS.
+                            // UPDATE 3/16/2012 (MCS): Removing logic to differentiate PostCards. All renewal_transaction_dates should use the DEFAULT_RETRY_RENEWAL_CHARGE_DAYS
+                            /* OLD:
+                                    if($is_postcard_confirmation){
+                                        tep_db_query("update orders set renewal_transaction_date = date_add(curdate(), INTERVAL " . RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS . " DAY) where orders_id = '" . $renewal_orders_id . "'");
+                                    }else{
+                                        tep_db_query("update orders set renewal_transaction_date = date_add(renewal_transaction_date, INTERVAL " . DEFAULT_RETRY_RENEWAL_CHARGE_DAYS . " DAY) where orders_id = '" . $renewal_orders_id . "'");
+                                    }
+                            */
+                            // NEW:
+                            command5 = new MySqlCommand("update orders set renewal_transaction_date = date_add(renewal_transaction_date, INTERVAL " + DEFAULT_RETRY_RENEWAL_CHARGE_DAYS.ToString() + " DAY) where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+                        }
                     }
                     else
                     {
+                        //On success update status, save the Response Message as part of the status change and
+                        //update cc_transactions table.
+                        //set the amount_owed to 0 and amount_paid to amount_owed.
+                        comments = response["RESULT"].ToString() + ":"+ response["RESPMSG"].ToString();
+                        comments = comments.Substring(0,255);
+                        customer_notification = (SEND_EMAILS == "true") ? "1" : "0";
 
+                        //enter the order into batch_item for fulfillment.
+			            create_fulfillment_batch_item(orders_id, FULFILLMENT_FULFILL_ID);
 
+                         command5 = new MySqlCommand("update " + TABLE_ORDERS + " set amount_paid = amount_owed, amount_owed = 0, orders_status = '" + MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID.ToString() + "' where orders_id = '" + orders_id.ToString() + "'", myConn);
+                         command5.ExecuteNonQuery();
+                         command5.Dispose();
+
+                         command5 = new MySqlCommand("insert into " + TABLE_ORDERS_STATUS_HISTORY + " (orders_id, orders_status_id, date_added, customer_notified, comments) values ('" + orders_id.ToString() + "', '" + MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID.ToString() + "', now(), '" + customer_notification + "', '" + comments.Replace("'", "\\'") + "')", myConn);
+                         command5.ExecuteNonQuery();
+                         command5.Dispose();
+
+                         command5 = new MySqlCommand("update " + TABLE_CC_TRANSACTIONS + " set cc_reference_id = '" + response["PNREF"].ToString() + "', cc_auth_code = '" + authCode + "', cc_transactions_message= '" + response["RESULT"].ToString()+ ":"+ response["RESPMSG"].ToString() + "' where cc_transactions_id = '" + cc_transactions_id.ToString() + "'", myConn);
+                         command5.ExecuteNonQuery();
+                         command5.Dispose();
+
+                         // Update our renewal orders cc expiration date.
+                         command5 = new MySqlCommand("update orders set cc_expires = '" + cc_expires + "' where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
+                         command5.ExecuteNonQuery();
+                         command5.Dispose();
+
+                         // Update the associated payment card details expiration date as well.
+                         command5 = new MySqlCommand("update payment_cards set cc_expires = '" + cc_expires + "' where payment_cards_id = '" + payment_cards_id.ToString() + "'", myConn);
+                         command5.ExecuteNonQuery();
+                         command5.Dispose();
+
+                         //update the order so it won't get pulled again.
+                         command5 = new MySqlCommand("update orders set renewal_transaction_date = null where orders_id = '" + orders_id.ToString() + "'", myConn);
+                         command5.ExecuteNonQuery();
+                         command5.Dispose();
+
+                         number_of_renewal_charged++;
                     }
-
                 }
 
                 myReader.Close();
@@ -2281,7 +2380,7 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static void create_fulfillment_batch_item(int orders_id, int fulfillment_status_id,
+        private static void create_fulfillment_batch_item(int orders_id, string fulfillment_status_id,
             string orders_previous_status = "")
         {
             try
@@ -2358,8 +2457,6 @@ namespace BlueDolphin.Renewal
 
                           }
                          
-                         
-                         
                                  private static DateTime get_end_delivery_range($first_issue_delay_days) {
                         $fulfillment_batch_week_array = get_fulfillment_batch_week();
                         $fulfillment_batch_date = $fulfillment_batch_week_array['fulfillment_batch_date'];
@@ -2408,7 +2505,6 @@ namespace BlueDolphin.Renewal
                         return;
                         }
                         }
-                          
                                  */
 
         private static bool isPerfectRenewal(Dictionary<string, object> order)
@@ -2452,7 +2548,6 @@ namespace BlueDolphin.Renewal
                 return 0;
             }
         }
-
 
         private static void debug(Dictionary<string, object> array, string name)
         {
@@ -2746,7 +2841,6 @@ namespace BlueDolphin.Renewal
             try
             {
                 bool stale = false;
-
                 double t1 =
                     DateTime.Parse("1/" + exp_month + "/" + exp_year).Subtract(new DateTime(1970, 2, 1)).TotalSeconds;
                 string t2 = DateTime.Parse("2" + "/1/" + "1970").AddSeconds(t1).ToString("dd/MM/yyyy");
@@ -2849,7 +2943,6 @@ namespace BlueDolphin.Renewal
             }
 
         }
-
 
         //$input - stuff to decrypt
         //$key - the secret key to use
@@ -2962,7 +3055,6 @@ namespace BlueDolphin.Renewal
 
         }
 
-
         private static Dictionary<string, object> pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
                                   string proxy_url = "", string proxy_port = "", string proxy_logon = "",
                                   string proxy_password = "")
@@ -3008,8 +3100,6 @@ namespace BlueDolphin.Renewal
 
                  }
 
-                
-
                 return configuration_values;
 
             }
@@ -3026,7 +3116,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 DEFAULT_ORDERS_STATUS_ID = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_ORDERS_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault();
                 RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_USER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_USER" select (string)dr["configuration_value"]).FirstOrDefault();
@@ -3036,7 +3125,11 @@ namespace BlueDolphin.Renewal
                 MODULE_PAYMENT_PAYFLOWPRO_TENDER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TENDER" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_PWD = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PWD" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
-
+                MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS" select (string)dr["configuration_value"]).FirstOrDefault());
+                MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES" select (string)dr["configuration_value"]).FirstOrDefault());
+                DEFAULT_RETRY_RENEWAL_CHARGE_DAYS = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_RETRY_RENEWAL_CHARGE_DAYS" select (string)dr["configuration_value"]).FirstOrDefault());
+                MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault());
+                SEND_EMAILS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "SEND_EMAILS" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_defaulthost = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_defaultport = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTPORT" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_defaulttimeout = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TIMEOUT" select (string)dr["configuration_value"]).FirstOrDefault();
