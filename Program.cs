@@ -119,6 +119,7 @@ namespace BlueDolphin.Renewal
         public static string MODULE_PAYMENT_PAYFLOWPRO_PWD = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS = string.Empty;
+        public static string MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS = string.Empty;
         private static string pfpro_defaultport = string.Empty;
         private static string pfpro_defaulttimeout = string.Empty;
         private static string pfpro_proxyaddress = string.Empty;
@@ -135,7 +136,7 @@ namespace BlueDolphin.Renewal
         public static string TRACK2_CHECK = "1016";
         public static string TRACK2_MC = "1,.017";
         public static string TRACK2_PC = "1018";
-
+        private static string comments;
         public static int number_of_renewal_orders_created;
         public static int number_of_renewal_orders_charged;
         public static int number_of_renewal_invoices_created;
@@ -1105,7 +1106,6 @@ namespace BlueDolphin.Renewal
                     response = pfpro_process(transaction, MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
                     if (Debug == true)
                     {
-
                         debug(response, "payflowresponse");
                     }
 
@@ -1129,7 +1129,7 @@ namespace BlueDolphin.Renewal
                         authCode = string.Empty;
                     }
 
-                    if (response["success"] == false)
+                    if (response == null)
                     {
                         the_code = response["RESULT"].ToString();
 
@@ -1139,8 +1139,37 @@ namespace BlueDolphin.Renewal
                         //update the order so it won't get pulled again.
                         command5 = new MySqlCommand("update orders set renewal_transaction_date = null where orders_id = '" + orders_id.ToString() + "'", myConn);
                         command5.ExecuteNonQuery();
+                        command5.Dispose();
                     }
+                    else if (response["RESULT"].ToString() != "0")
+                    {
+                        //if there was  a response but it wasn't 0. Orders are set to Pending status, this is
+                        //different from the live site, since we are not pushing this order into track to
+                        //it needs to still Pending.
+                        //update the orders' information. we are not using tep_is_valid_status_change
+                        //because we know it is a valid change. We don't want admin to change Pend->Error.
 
+                        comments = MODULE_PAYMENT_PAYFLOWPRO_TEXT_ERROR + " " + response["RESPMSG"].ToString();
+                        comments = comments.Substring(0, 255);
+
+                        command5 = new MySqlCommand("update " + TABLE_CC_TRANSACTIONS + " set cc_reference_id = '" + response["PNREF"].ToString() + "', cc_auth_code = '" + authCode + "', cc_transactions_message= '" + response["RESULT"].ToString() + ":" + response["RESPMSG"].ToString() + "' where cc_transactions_id = '" + cc_transactions_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+
+                        //check for the certain response codes, if it finds it push on through the recycling process
+                        the_code = response["RESULT"].ToString();
+                        the_code = the_code.Substring(0, 3);
+
+                        if (the_code == "501" || the_code == "302" || the_code == "301" || the_code == "328" || the_code == "327" || the_code == "311" || the_code == "326" || the_code == "355" || the_code == "610" || the_code == "612" || the_code == "611" || the_code == "714" || the_code == "716" || the_code == "321" || the_code == "330" || the_code == "324" || the_code == "310" || the_code == "322" || the_code == "304" || the_code == "323" || the_code == "303" || the_code == "307" || the_code == "325" || the_code == "140" || the_code == "713")
+                        {
+                            renewals_credit_card_charge_attempts = MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS;
+                        }
+                    }
+                    else
+                    {
+
+
+                    }
 
                 }
 
@@ -2904,19 +2933,21 @@ namespace BlueDolphin.Renewal
 
                   MySqlDataReader myReader;
                   myReader = command.ExecuteReader();
-                
-                if(myReader.HasRows){
 
-                    while(myReader.Read())
-                    {
-                        return myReader["merchant_processor_reporting_group"].ToString();
-                    }
+                  if (myReader.HasRows)
+                  {
 
-                }
-                else{
+                      while (myReader.Read())
+                      {
+                          return myReader["merchant_processor_reporting_group"].ToString();
+                      }
 
-                    return "";
-                }
+                  }
+                  else
+                  {
+
+                      return "";
+                  }
 
                 return "";
             }
