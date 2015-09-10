@@ -237,6 +237,8 @@ namespace BlueDolphin.Renewal
         private static bool is_gc_order;
         private static string Key = "W1j Witt3 Wy4en W1l13n W3l Warm3 Woll$n WiNter W4nt3n Wa553n";
         private static string suffix;
+        private static string authCode;
+        private static string the_code;
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -1014,15 +1016,16 @@ namespace BlueDolphin.Renewal
                         command2 = new MySqlCommand(@"update orders set renewal_transaction_date = null where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
                         command2.ExecuteNonQuery();
 
-                        log_renewal_process("charge_renewal_orders(): Not charging this order, because " +check_renewal_order_result, renewal_orders_id);
-			            continue;
+                        log_renewal_process("charge_renewal_orders(): Not charging this order, because " + check_renewal_order_result, renewal_orders_id);
+                        continue;
                     }
 
-                    if(renewal_invoices_created == 0 || renewal_invoices_sent == 0){
+                    if (renewal_invoices_created == 0 || renewal_invoices_sent == 0)
+                    {
 
 
-                       log_renewal_process("charge_renewal_orders(): Not charging this order, because the renewal_invoices_created was " +renewal_invoices_created.ToString() + " and renewal_invoices_sent is " +  renewal_invoices_sent.ToString() + ". Both need to be 1!", renewal_orders_id);
-			           continue;
+                        log_renewal_process("charge_renewal_orders(): Not charging this order, because the renewal_invoices_created was " + renewal_invoices_created.ToString() + " and renewal_invoices_sent is " + renewal_invoices_sent.ToString() + ". Both need to be 1!", renewal_orders_id);
+                        continue;
                     }
 
                     //charge the card
@@ -1030,7 +1033,7 @@ namespace BlueDolphin.Renewal
                     //start by entering an new (empty) cc_transaction record to get
                     //a transaction_id that will be stored on the order record(s)
                     //we will update this table in the after_process().
-                    sql_data_array = new Dictionary<string,object>();
+                    sql_data_array = new Dictionary<string, object>();
                     sql_data_array["cc_reference_id"] = "";
                     sql_data_array["cc_auth_code"] = "";
                     sql_data_array["now()"] = "";
@@ -1040,10 +1043,10 @@ namespace BlueDolphin.Renewal
                     int cc_transactions_id = Convert.ToInt32(command.LastInsertedId);
 
                     //Add this cc_transaction to this order.
-                    command4 = new MySqlCommand(@"INSERT INTO " + TABLE_CC_TRANSACTIONS_ORDERS + " (cc_transactions_id, orders_id) VALUES ('" + cc_transactions_id.ToString() +"', '" + orders_id.ToString() + "')", myConn);
+                    command4 = new MySqlCommand(@"INSERT INTO " + TABLE_CC_TRANSACTIONS_ORDERS + " (cc_transactions_id, orders_id) VALUES ('" + cc_transactions_id.ToString() + "', '" + orders_id.ToString() + "')", myConn);
                     command4.ExecuteNonQuery();
 
-                    Dictionary<string, object> countries_array = new Dictionary<string,object>();
+                    Dictionary<string, object> countries_array = new Dictionary<string, object>();
                     countries_array = countries;
                     string billing_country_name = countries_array[billing_country].ToString();
                     string is_gc_order_returned = (is_gc_order == true) ? "True" : "False";
@@ -1097,16 +1100,51 @@ namespace BlueDolphin.Renewal
                     transaction["L_TAXAMT" + suffix] = Convert.ToDouble(myReader["products_tax"]).ToString("#,##0.00");
 
                     debug(transaction, "tansaction");
-                    Environment.SetEnvironmentVariable("PFPRO_CERT_PATH=", MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV, EnvironmentVariableTarget.Machine);
+                    Environment.SetEnvironmentVariable("PFPRO_CERT_PATH", MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV, EnvironmentVariableTarget.Machine);
                     response = new Dictionary<string, object>();
-                    response = pfpro_process(transaction,MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
+                    response = pfpro_process(transaction, MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
+                    if (Debug == true)
+                    {
+
+                        debug(response, "payflowresponse");
+                    }
+
+                    // Up our counter for renewal_credit_card_charge_attempts by one.
+                    command5 = new MySqlCommand("update orders set renewals_credit_card_charge_attempts = " + renewals_credit_card_charge_attempts.ToString() + " where orders_id = '" + renewal_orders_id.ToString() + "'",myConn);
+                    command5.ExecuteNonQuery();
+
+                    // if we don't get a response the card might have been charged, need to check with Merchant Processor.
+                    // if there was a good transaction, we will update the order status to 'Paid' and add the cc_reference_id to
+                    // the transaction id from Merchant Processor, also amount_paid will be set and amount_owed will be set to 0.
+                    // If there was no transaction or a bad one, we will update the order status to 'Cancel' since amount_paid wasn't updated
+                    // it will not show up in the refund report.
+                    //
+
+                    if (response["AUTHCODE"] != string.Empty)
+                    {
+                        authCode = response["AUTHCODE"].ToString();
+                    }
+                    else
+                    {
+                        authCode = string.Empty;
+                    }
+
+                    if (response["success"] == false)
+                    {
+                        the_code = response["RESULT"].ToString();
+
+                        //do nothing need to check with Merchant Processor and see if the cc was charged or not.
+                        //Order stays in pending.
+
+                        //update the order so it won't get pulled again.
+                        command5 = new MySqlCommand("update orders set renewal_transaction_date = null where orders_id = '" + orders_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                    }
 
 
                 }
 
                 myReader.Close();
-
-                         
 
                 return number_of_renewal_charged;
             }
@@ -2819,6 +2857,40 @@ namespace BlueDolphin.Renewal
 
         }
 
+        private static string encrypt_cc(int input, int customer_id)
+        {
+
+            try
+            {
+                string key = get_key();
+                string input2 = input.ToString();
+                input2 = input2.Replace("\n", "");
+                input2 = input2.Replace("\t", "");
+                input2 = input2.Replace("\r", "");
+                input2 = input2.Trim();
+
+                /*      $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
+                        $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
+                        $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
+                        mcrypt_generic_init ($td, $key, $iv);
+                        $encrypted_data = mcrypt_generic ($td, $input);
+                        mcrypt_generic_deinit ($td);
+                        mcrypt_module_close ($td);
+                        return trim(chop(base64_encode($encrypted_data)));
+                 
+                 */
+
+                return key;
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return e.Message;
+            }
+
+        }
+
         private static string get_merchant_processor_reporting_group(int skinsitesId)
         {
             try
@@ -2875,6 +2947,7 @@ namespace BlueDolphin.Renewal
                 proxy_logon = pfpro_proxylogin;
                 proxy_password = pfpro_proxypassword;
 
+                Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", LD_LIBRARY_PATH_ENV, EnvironmentVariableTarget.Machine);
 
                 if (transaction.Count == 0)
                     return null;
@@ -2941,7 +3014,7 @@ namespace BlueDolphin.Renewal
                 pfpro_proxylogin = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_LOGON" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_proxypassword = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_PASSWORD" select (string)dr["configuration_value"]).FirstOrDefault();
                 PFPRO_EXE_PATH = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_EXE_PATH_D" select (string)dr["configuration_value"]).FirstOrDefault();
-                LD_LIBRARY_PATH_ENV = "LD_LIBRARY_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_LD_LIBRARY_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
+                LD_LIBRARY_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_LD_LIBRARY_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
                 PFPRO_CERT_PATH_ENV = "PFPRO_CERT_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
 
             }
