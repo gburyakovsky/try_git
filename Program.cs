@@ -155,6 +155,7 @@ namespace BlueDolphin.Renewal
         private static int orders_status;
         private static string skus_type;
         private static int skus_type_order_period;
+        private static int fulfillment_batch_id;
         /// <summary>
         /// Variables
         /// </summary>
@@ -206,6 +207,7 @@ namespace BlueDolphin.Renewal
         private static int payment_cards_id;
         private static int first_issue_delay_days;
         private static int days_spanned;
+        private static int fulfillment_batch_items_id;
         private static string billing_first_name;
         private static string billing_last_name;
         private static string billing_address_line_1;
@@ -264,8 +266,9 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> renewal_order_status_history;
         private static Dictionary<string, object> renewal_order_total;
         private static Dictionary<string, object> renewal_order_subtotal;
-        private static Dictionary<string, object> fulfillment_batch_week;
+        //private static Dictionary<string, object> fulfillment_batch_week;
         private static Dictionary<string, object> sql_data_array;
+        private static Dictionary<string, object> sql_data_array2;
         private static Dictionary<string, object> transaction;
         private static List<string> orders_columns;
         private static List<string> orders_products_columns;
@@ -278,6 +281,7 @@ namespace BlueDolphin.Renewal
         private static DataTable config_values;
         private static DataTable getFulfillmentBatchWeek = null;
         private static DataTable fulfillment_delay_batch_week_array;
+        private static DataTable fulfillment_current_batch_week_array;
 
         /// <summary>
         /// 
@@ -1042,7 +1046,7 @@ namespace BlueDolphin.Renewal
                     sql_data_array = new Dictionary<string, object>();
                     sql_data_array["cc_reference_id"] = "";
                     sql_data_array["cc_auth_code"] = "";
-                    sql_data_array["now()"] = "";
+                    sql_data_array["cc_transactions_date"] = "now()";
                     string transactions_query = tep_db_perform(TABLE_CC_TRANSACTIONS, sql_data_array);
                     command3 = new MySqlCommand(transactions_query, myConn);
                     command3.ExecuteNonQuery();
@@ -2465,14 +2469,39 @@ namespace BlueDolphin.Renewal
 
                     fulfillment_delay_batch_week_array = new DataTable();
                     fulfillment_delay_batch_week_array = get_fulfillment_batch_week(renewal_fulfillment_delay);
+                    fulfillment_delay_batch_week = (from DataRow dr in fulfillment_delay_batch_week_array.Rows select (string)dr["fulfillment_batch_week"]).FirstOrDefault();
+                    fulfillment_delay_batch_date = Convert.ToDateTime((from DataRow dr in fulfillment_delay_batch_week_array.Rows select (DateTime)dr["fulfillment_batch_date"]).FirstOrDefault());
 
-                    //fulfillment_delay_batch_week
-                    //fulfillment_delay_batch_date
+                    fulfillment_current_batch_week_array = new DataTable();
+                    fulfillment_current_batch_week_array = get_fulfillment_batch_week();
+                    fulfillment_current_batch_week = (from DataRow dr in fulfillment_current_batch_week_array.Rows select (string)dr["fulfillment_batch_week"]).FirstOrDefault();
+                    fulfillment_current_batch_date = Convert.ToDateTime((from DataRow dr in fulfillment_current_batch_week_array.Rows select (DateTime)dr["fulfillment_batch_date"]).FirstOrDefault());
 
-                    fulfillment_delay_batch_week_array = new DataTable();
-                    fulfillment_delay_batch_week_array = get_fulfillment_batch_week();
+                    //if this is a renewals FULFILL batch item, we should always get the delay batch week, unless
+                    //we've already gone past it.
+                    if (fulfillment_status_id == FULFILLMENT_FULFILL_ID && Convert.ToInt32(fulfillment_current_batch_week) <= Convert.ToInt32(fulfillment_delay_batch_week))
+                    {
+                        fulfillment_batch_week = (from DataRow dr in fulfillment_delay_batch_week_array.Rows select (string)dr["fulfillment_batch_week"]).FirstOrDefault();
+                        fulfillment_batch_date = Convert.ToDateTime((from DataRow dr in fulfillment_delay_batch_week_array.Rows select (DateTime)dr["fulfillment_batch_date"]).FirstOrDefault());
+                    }
+                    else
+                    {
+                        //For the CANCEL batch item we use the current, because this is only a PENDING -> CANCEL
+                        fulfillment_batch_week = (from DataRow dr in fulfillment_current_batch_week_array.Rows select (string)dr["fulfillment_batch_week"]).FirstOrDefault();
+                        fulfillment_batch_date = Convert.ToDateTime((from DataRow dr in fulfillment_current_batch_week_array.Rows select (DateTime)dr["fulfillment_batch_date"]).FirstOrDefault());
+                    }
 
-                    
+                    fulfillment_batch_id = get_fulfillment_batch_id(products_id, fulfillment_status_id, fulfillment_batch_week, fulfillment_batch_date, skus_type, skus_type_order, skus_type_order_period);
+                    sql_data_array2 = new Dictionary<string, object>();
+                    sql_data_array2["date_added"] = "now()";
+                    sql_data_array2["fulfillment_batch_id"] = fulfillment_batch_id.ToString();
+                    sql_data_array2["orders_id"] = orders_id.ToString();
+                    string batch_items_query = tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, sql_data_array2);
+                    command5 = new MySqlCommand(batch_items_query, myConn);
+                    command5.ExecuteNonQuery();    
+                    fulfillment_batch_items_id = Convert.ToInt32(command5.LastInsertedId);
+                    command5.Dispose();
+                     
             }
             catch (Exception e)
             {
@@ -2481,80 +2510,25 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        /*  private static int get_fulfillment_batch_id($products_id, $fulfillment_status_id, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period) {
+        private static int get_fulfillment_batch_id(int productsId, string fulfillmentStatusId, string fulfillmentBatchWeek, DateTime fulfillmentBatchDate, string skusType, int skusTypeOrder, int skusTypeOrderPeriod)
+        {
+            try
+            {
+                //Because of potential transactional problems, we can't just do a search and then an insert, because
+                //another thread might have inserted in between our select and insert. Locking won't work either because
+                //we are using different threads each time we call tep_db_query. So I will just insert and the
+                //newly added tep_db_query_return_error function will allow the insert to fail, but continue the script.
+                // we can then check for error using tep_db_query_returned_error.
 
-                              //Because of potential transactional problems, we can't just do a search and then an insert, because
-                              //another thread might have inserted in between our select and insert. Locking won't work either because
-                              //we are using different threads each time we call tep_db_query. So I will just insert and the
-                              //newly added tep_db_query_return_error function will allow the insert to fail, but continue the script.
-                              // we can then check for error using tep_db_query_returned_error.
-                              $result = tep_db_query_return_error("insert into " . TABLE_FULFILLMENT_BATCH . " (date_added, fulfillment_batch_week, fulfillment_batch_date, fulfillment_status_id, products_id, skus_type, skus_type_order, skus_type_order_period)
-                                        values (now(), '" . $fulfillment_batch_week . "', '" . $fulfillment_batch_date . "', '" . $fulfillment_status_id . "', '" . $products_id . "', '" . $skus_type . "', '" . $skus_type_order . "', '" . $skus_type_order_period . "')");
+            }
+            catch (Exception e)
+            {
 
+                Console.WriteLine(e.Message);
+                return 0;
+            }
 
-                              if (tep_db_query_returned_error()) {
-                                  //assuming duplicate error, so select batch_id form existing record.
-                                  $fulfillment_batch_query = tep_db_query("select fulfillment_batch_id from " . TABLE_FULFILLMENT_BATCH . " where products_id = '" . $products_id . "' and fulfillment_status_id = '" . $fulfillment_status_id . "' and fulfillment_batch_week = '" . $fulfillment_batch_week . "' and skus_type ='" . $skus_type . "' and skus_type_order = '" . $skus_type_order . "' and skus_type_order_period = '" . $skus_type_order_period . "'");
-                                  $fulfillment_batch_array = tep_db_fetch_array($fulfillment_batch_query);
-                                  $fulfillment_batch_id = $fulfillment_batch_array['fulfillment_batch_id'];
-                              } else {
-                                  //no error,so get the new id.
-                                  $fulfillment_batch_id = tep_db_insert_id();
-                              }
-
-                              return $fulfillment_batch_id;
-
-                          }
-                         
-                                 private static DateTime get_end_delivery_range($first_issue_delay_days) {
-                        $fulfillment_batch_week_array = get_fulfillment_batch_week();
-                        $fulfillment_batch_date = $fulfillment_batch_week_array['fulfillment_batch_date'];
-
-                        if ($first_issue_delay_days > 0) {
-                        $year = (int)substr($fulfillment_batch_date, 0, 4);
-                        $month = (int)substr($fulfillment_batch_date, 5, 2);
-                        $day = (int)substr($fulfillment_batch_date, 8, 2);
-                        $hour = (int)substr($fulfillment_batch_date, 11, 2);
-                        $minute = (int)substr($fulfillment_batch_date, 14, 2);
-                        $second = (int)substr($fulfillment_batch_date, 17, 2);
-
-                        //Calcuate the last day of the expected first issue date range.
-                        //The batch_date + 3 gets to Wednesday when orders are sent for fulfillment.
-                        //The first day of the range is the fulfillment day + the delay days.
-                        //10 days is added for the last day of the date range.
-
-                        $end_delivery_range_date = mktime($hour,$minute,$second,$month,$day,$year) + (86400 * ($first_issue_delay_days + 13));
-
-                        return strftime(DATE_FORMAT_DB, $end_delivery_range_date);
-                        } else {
-                        return;
-                        }
-                        }
-                               function get_end_delivery_range($first_issue_delay_days) {
-                        $fulfillment_batch_week_array = get_fulfillment_batch_week();
-                        $fulfillment_batch_date = $fulfillment_batch_week_array['fulfillment_batch_date'];
-
-                        if ($first_issue_delay_days > 0) {
-                        $year = (int)substr($fulfillment_batch_date, 0, 4);
-                        $month = (int)substr($fulfillment_batch_date, 5, 2);
-                        $day = (int)substr($fulfillment_batch_date, 8, 2);
-                        $hour = (int)substr($fulfillment_batch_date, 11, 2);
-                        $minute = (int)substr($fulfillment_batch_date, 14, 2);
-                        $second = (int)substr($fulfillment_batch_date, 17, 2);
-
-                        //Calcuate the last day of the expected first issue date range.
-                        //The batch_date + 3 gets to Wednesday when orders are sent for fulfillment.
-                        //The first day of the range is the fulfillment day + the delay days.
-                        //10 days is added for the last day of the date range.
-
-                        $end_delivery_range_date = mktime($hour,$minute,$second,$month,$day,$year) + (86400 * ($first_issue_delay_days + 13));
-
-                        return strftime(DATE_FORMAT_DB, $end_delivery_range_date);
-                        } else {
-                        return;
-                        }
-                        }
-                                 */
+        }
 
         private static bool isPerfectRenewal(Dictionary<string, object> order)
         {
