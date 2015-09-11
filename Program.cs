@@ -244,6 +244,13 @@ namespace BlueDolphin.Renewal
         private static string suffix;
         private static string authCode;
         private static string the_code;
+        private static string renewal_fulfillment_delay;
+        private static string fulfillment_delay_batch_week;
+        private static DateTime fulfillment_delay_batch_date;
+        private static string fulfillment_current_batch_week;
+        private static DateTime fulfillment_current_batch_date;
+        private static string fulfillment_batch_week;
+        private static DateTime fulfillment_batch_date;
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -270,6 +277,7 @@ namespace BlueDolphin.Renewal
         private static DataTable currencies;
         private static DataTable config_values;
         private static DataTable getFulfillmentBatchWeek = null;
+        private static DataTable fulfillment_delay_batch_week_array;
 
         /// <summary>
         /// 
@@ -2424,6 +2432,47 @@ namespace BlueDolphin.Renewal
 
                 order_product_info_array.Close();
 
+                //If the subscription is less than 6 months, only delay fulfillment to the next
+                //batch week.
+
+                // If there is a previous order id, use the previous orders skus_days_spanned
+                if (prior_orders_id.ToString() != string.Empty)
+                {
+
+                    command5 = new MySqlCommand("select s.skus_days_spanned from " + TABLE_SKUS + " s,  " + TABLE_ORDERS_PRODUCTS + " op where s.products_id = op.products_id AND op.orders_id = '" + prior_orders_id.ToString() + "'", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                    MySqlDataReader prior_order;
+                    prior_order = command5.ExecuteReader();
+
+                    while (prior_order.Read())
+                    {
+
+                        days_spanned = Convert.ToInt32(prior_order["skus_days_spanned"]);
+
+                    }
+                }
+
+                    if (days_spanned < 183)
+                    {
+                        renewal_fulfillment_delay = "DATE_ADD('" + date_purchased.ToString() + "' ,INTERVAL 7 DAY)";
+                    }
+                    else
+                    {
+                        renewal_fulfillment_delay = "DATE_ADD('" + date_purchased.ToString() + "' ,INTERVAL 84 DAY)";
+                    }
+
+
+                    fulfillment_delay_batch_week_array = new DataTable();
+                    fulfillment_delay_batch_week_array = get_fulfillment_batch_week(renewal_fulfillment_delay);
+
+                    //fulfillment_delay_batch_week
+                    //fulfillment_delay_batch_date
+
+                    fulfillment_delay_batch_week_array = new DataTable();
+                    fulfillment_delay_batch_week_array = get_fulfillment_batch_week();
+
+                    
             }
             catch (Exception e)
             {
