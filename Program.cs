@@ -305,21 +305,16 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 // Set our email body string for our e-mail to an empty string.
                 string email_body = string.Empty;
-
                 //this allows the script to run without any maximum executiont time.
                 // set_time_limit(0)  Do we need this in .NET?;
-
                 myConn.Open();
-
                 set_all_defines();
                 config_values = get_configuration_values();
                 set_config_values(config_values);
 
                 //set up logging of script to file
-
                 Console.WriteLine("Begin renewal main" + "\n");
                 //log_renewal_process("Begin renewal main");
                 email_body += "Begin renewal main \n\n";
@@ -2433,7 +2428,7 @@ namespace BlueDolphin.Renewal
                     date_purchased = Convert.ToDateTime(order_product_info_array["date_purchased"]);
 
                 }
-
+              
                 order_product_info_array.Close();
 
                 //If the subscription is less than 6 months, only delay fulfillment to the next
@@ -2494,13 +2489,43 @@ namespace BlueDolphin.Renewal
                     fulfillment_batch_id = get_fulfillment_batch_id(products_id, fulfillment_status_id, fulfillment_batch_week, fulfillment_batch_date, skus_type, skus_type_order, skus_type_order_period);
                     sql_data_array2 = new Dictionary<string, object>();
                     sql_data_array2["date_added"] = "now()";
-                    sql_data_array2["fulfillment_batch_id"] = fulfillment_batch_id.ToString();
-                    sql_data_array2["orders_id"] = orders_id.ToString();
+                    sql_data_array2["fulfillment_batch_id"] = fulfillment_batch_id;
+                    sql_data_array2["orders_id"] = orders_id;
                     string batch_items_query = tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, sql_data_array2);
                     command5 = new MySqlCommand(batch_items_query, myConn);
                     command5.ExecuteNonQuery();    
                     fulfillment_batch_items_id = Convert.ToInt32(command5.LastInsertedId);
                     command5.Dispose();
+
+                //this renewal process only cancel's PENDING orders, so we don't need to check
+                //the batch week.so add another record for ignore fulfillment.
+                    if (fulfillment_status_id == FULFILLMENT_CANCEL_ID)
+                    {
+                        if (orders_previous_status == DEFAULT_ORDERS_STATUS_ID)
+                        {
+                            fulfillment_batch_id = get_fulfillment_batch_id(products_id, FULFILLMENT_IGNORE_FULFILLMENT_ID, fulfillment_batch_week, fulfillment_batch_date, skus_type, skus_type_order, skus_type_order_period);
+                            sql_data_array = new Dictionary<string, object>();
+                            sql_data_array["date_added"] = "now()";
+                            sql_data_array["fulfillment_batch_id"] = fulfillment_batch_id;
+                            sql_data_array["date_added"] = orders_id;
+                            string batch_items_query2 = tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, sql_data_array);
+                            command5 = new MySqlCommand(batch_items_query2, myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+                        }
+                    }
+                    else if (fulfillment_status_id == FULFILLMENT_CHANGE_ADDRESS_ID)
+                    {
+                        //if this is an address change we need to check to see if this is in the same batch week
+                        //if so, we need to enter the fulfillment_change_address batch item and also
+                        //add back in the batch item for whatever batch_item was there previous.
+                        //use the orders' fulfillment_batch_id to see if we're in the same batchweek.
+                        if (order_fulfillment_batch_id.ToString() != string.Empty) { 
+                        
+                        
+                        }
+
+                    }
                      
             }
             catch (Exception e)
@@ -2519,6 +2544,53 @@ namespace BlueDolphin.Renewal
                 //we are using different threads each time we call tep_db_query. So I will just insert and the
                 //newly added tep_db_query_return_error function will allow the insert to fail, but continue the script.
                 // we can then check for error using tep_db_query_returned_error.
+                int fulfillmentBatchId = 0;
+                bool mySqlError = false;
+                MySqlDataReader bId;
+
+                try
+                {
+                    command5 = new MySqlCommand("insert into " + TABLE_FULFILLMENT_BATCH + @" (date_added, fulfillment_batch_week, fulfillment_batch_date, 
+                fulfillment_status_id, products_id, skus_type, skus_type_order, skus_type_order_period)
+                values (now(), '" + fulfillmentBatchWeek + "', '" + fulfillmentBatchDate.ToString() + "', '" + fulfillmentStatusId + "', '" + productsId.ToString() +
+                    "', '" + skusType + "', '" + skusTypeOrder.ToString() + "', '" + skusTypeOrderPeriod.ToString() + "')", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                }
+                catch (MySqlException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    if (ex.Message.Contains("Duplicate"))
+                    {
+                        mySqlError = true;
+                    }
+                }
+
+                if (mySqlError)
+                {
+                    //assuming duplicate error, so select batch_id from existing record.
+                    command5 = new MySqlCommand(@"select fulfillment_batch_id from " + TABLE_FULFILLMENT_BATCH + " where products_id = '" + productsId.ToString() +
+                        "' and fulfillment_status_id = '" + fulfillmentStatusId + "' and fulfillment_batch_week = '" + fulfillmentBatchWeek +
+                    "' and skus_type ='" + skusType + "' and skus_type_order = '" + skusTypeOrder.ToString() + "' and skus_type_order_period = '"
+                        + skusTypeOrderPeriod.ToString() + "'", myConn);
+                    command5.ExecuteNonQuery();
+                    bId = command5.ExecuteReader();
+                    while (bId.Read())
+                    {
+
+                        fulfillmentBatchId = Convert.ToInt32(bId["fulfillment_batch_id"]);
+                    }
+
+                    bId.Close();
+                    command5.Dispose();
+                }
+                else
+                {
+                    //no error,so get the new id.
+                    fulfillmentBatchId = Convert.ToInt32(command5.LastInsertedId);
+                }
+
+                return fulfillmentBatchId;
 
             }
             catch (Exception e)
