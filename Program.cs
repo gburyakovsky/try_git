@@ -253,6 +253,8 @@ namespace BlueDolphin.Renewal
         private static DateTime fulfillment_current_batch_date;
         private static string fulfillment_batch_week;
         private static DateTime fulfillment_batch_date;
+        private static string order_fulfillment_batch_week;
+        private static int order_fulfillment_status_id;
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -2507,7 +2509,7 @@ namespace BlueDolphin.Renewal
                             sql_data_array = new Dictionary<string, object>();
                             sql_data_array["date_added"] = "now()";
                             sql_data_array["fulfillment_batch_id"] = fulfillment_batch_id;
-                            sql_data_array["date_added"] = orders_id;
+                            sql_data_array["orders_id"] = orders_id;
                             string batch_items_query2 = tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, sql_data_array);
                             command5 = new MySqlCommand(batch_items_query2, myConn);
                             command5.ExecuteNonQuery();
@@ -2520,9 +2522,61 @@ namespace BlueDolphin.Renewal
                         //if so, we need to enter the fulfillment_change_address batch item and also
                         //add back in the batch item for whatever batch_item was there previous.
                         //use the orders' fulfillment_batch_id to see if we're in the same batchweek.
-                        if (order_fulfillment_batch_id.ToString() != string.Empty) { 
-                        
-                        
+                        if (order_fulfillment_batch_id.ToString() != string.Empty)
+                        {
+                            command5 = new MySqlCommand("select fb.fulfillment_status_id, fb.fulfillment_batch_week from " + TABLE_FULFILLMENT_BATCH + " fb where fb.fulfillment_batch_id = '" + order_fulfillment_batch_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            MySqlDataReader order_fulfillment_batch_array;
+
+                            order_fulfillment_batch_array = command5.ExecuteReader();
+                            while (order_fulfillment_batch_array.Read())
+                            {
+
+                                order_fulfillment_batch_week = order_fulfillment_batch_array["fulfillment_batch_week"].ToString();
+                                order_fulfillment_status_id = Convert.ToInt32(order_fulfillment_batch_array["fulfillment_status_id"]);
+                            }
+
+                            order_fulfillment_batch_array.Close();
+                            command5.Dispose();
+
+                            //if we are in the same batchweek as the most recent order fulfillment batch then add
+                            //that batch back in, except if the previous status was a change address.
+                            //we are checking to see if the $order_fulfillment_batch_week is greater or equal to the
+                            //current batch week, because a renewal might have a delayed fulfillment batch item.
+                            //so if it is the same batch week or if the batch week is in the future then
+                            //add back in that batch week.
+                            if (order_fulfillment_status_id != Convert.ToInt32(FULFILLMENT_CHANGE_ADDRESS_ID) && Convert.ToInt32(order_fulfillment_batch_week) >= Convert.ToInt32(fulfillment_batch_week))
+                            {
+
+                                sql_data_array = new Dictionary<string, object>();
+                                sql_data_array["date_added"] = "now()";
+                                sql_data_array["fulfillment_batch_id"] = order_fulfillment_batch_id;
+                                sql_data_array["date_added"] = orders_id;
+                                string batch_items_query2 = tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, sql_data_array);
+                                command5 = new MySqlCommand(batch_items_query2, myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+
+                            }
+                            else
+                            {
+                                //If there is no $order_fulfillment_batch_id, add in the ignore fulfillment.
+                                //This means an address change was done on a Pending order.
+                                fulfillment_batch_id = get_fulfillment_batch_id(products_id, FULFILLMENT_IGNORE_FULFILLMENT_ID, fulfillment_batch_week, fulfillment_batch_date, skus_type, skus_type_order, skus_type_order_period);
+                                sql_data_array = new Dictionary<string, object>();
+                                sql_data_array["date_added"] = "now()";
+                                sql_data_array["fulfillment_batch_id"] = fulfillment_batch_id;
+                                sql_data_array["date_added"] = orders_id;
+                                string batch_items_query2 = tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, sql_data_array);
+                                command5 = new MySqlCommand(batch_items_query2, myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+
+                            }
+                            //Add in the previous_address_book_id to the batch_item. Used to display on orders.
+                            command5 = new MySqlCommand("update fulfillment_batch_items fbi, orders o set fbi.previous_delivery_address_book_id = o.previous_delivery_address_book_id where fbi.orders_id = o.orders_id and fbi.fulfillment_batch_items_id = '" + fulfillment_batch_items_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
                         }
 
                     }
