@@ -1809,12 +1809,12 @@ namespace BlueDolphin.Renewal
             {
                 string renewal_lead_time;
                 DateTime renewal_date;
-                int skus_days_spanned;
+                int skus_days_spanned = 0;
 
                 if (orders_id.ToString() == string.Empty)
                 {
 
-                    return null;
+                    return string.Empty;
                 }
 
                 command = new MySqlCommand(string.Empty, myConn);
@@ -1868,15 +1868,39 @@ namespace BlueDolphin.Renewal
                 {
 
                     //renewal notice date for new orders is date paid + days_spanned - leadtime
-                    renewal_date = DateTime.Parse(read["date_paid"]);
+                    renewal_date = DateTime.Parse(read["date_paid"].ToString());
                     renewal_date = renewal_date.AddDays(skus_days_spanned);
+                    renewal_date = renewal_date.AddDays(Convert.ToInt32(renewal_lead_time) * -1);
                 }
-                return DateTime.Now;
+                else
+                {
+
+                    //renewal date for renewal orders is order_date + days_spanned
+                    //no need to add lead time it is already built in since this is a renewal.
+                    //so instread of  order_date + days_spanned - leadtime (which is for INTRO skus)
+                    //we only need order_date + days_spanned
+                    renewal_date = DateTime.Parse(read["date_paid"].ToString());
+                    renewal_date = renewal_date.AddDays(skus_days_spanned);
+
+                }
+
+                // 	If is_postcard_confirmation, modify the final renewal_date by ADDING the value from the configuration key
+                // 	DEFAULT_RENEWAL_CHARGE_DAYS and SUBTRACTING the value from the configuration key
+                // 	RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS.
+                if (read["is_postcard_confirmation"].ToString() == "1")
+                {
+
+                    renewal_date = renewal_date.AddDays(Convert.ToInt32(DEFAULT_RENEWAL_CHARGE_DAYS));
+                    renewal_date = renewal_date.AddDays(Convert.ToInt32(RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS)*-1);
+                }
+                command.Dispose();
+                read.Close();
+                return renewal_date.ToString("yyyy-MM-dd HH:mm:ss");
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-                return DateTime.Now;
+                return string.Empty;
 
             }
         }
@@ -2432,6 +2456,7 @@ namespace BlueDolphin.Renewal
                     return;
                 }
 
+                string paid_status=string.Empty;
                 update_orders_fulfillment_status_id = true;
 
                 //should always just have 1 orders_producst row so limit by 1.
@@ -2611,6 +2636,7 @@ namespace BlueDolphin.Renewal
                             command5.ExecuteNonQuery();
                             command5.Dispose();
                         }
+                    }
 
                         //In most cases we need to update the order to reflect the newly created batch_id
                         //but with address change within same batch week we don't have to since
@@ -2632,9 +2658,45 @@ namespace BlueDolphin.Renewal
 
                             }
 
+                            //Now add the last status to the order.fulfillment_batch_id field. Used in fulfillment process.
+                            //this will always hold the most recent fulfillment status.
+                            command5 = new MySqlCommand("update " + TABLE_ORDERS + " set fulfillment_batch_id = '" + fulfillment_batch_id.ToString() + "'" + update_fulfill_fields + " where orders_id = '" + orders_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+
+                            //The problem with the above is that it overwrites a previous batchweek's fulfillment_batch_id this causes us to not be able to
+                            //rerun a run monday report and getting the same result. Therefore we need to make sure we do this by batch week and store that in separate table.
+                            //I'll keep doing the previous since a lot of code it report are touching it.
+                            //I am using the handy dandy replace since I have a unique index on orders and fulfillment_batch_week. This will always give me the latest
+                            //batch_id for a particular batchweek.
+                            command5 = new MySqlCommand("replace into " + TABLE_ORDERS_FULFILLMENT_BATCH_HISTORY + " (orders_id, fulfillment_batch_id, fulfillment_batch_week) values ('" + orders_id.ToString() + "', '" + fulfillment_batch_id + "', '" + fulfillment_batch_week + "')", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+
+                            //update the products_ordered field for bestsellers
+                            command5 = new MySqlCommand("select * from " + TABLE_ORDERS + " where orders_id ='" + orders_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            MySqlDataReader orders_paid_fetch;
+                            orders_paid_fetch = command5.ExecuteReader();
+
+                            while (orders_paid_fetch.Read())
+                            {
+
+                                paid_status = orders_paid_fetch["orders_status"].ToString();
+                            }
+
+                            orders_paid_fetch.Close();
+                            command5.Dispose();
+
+                            if (paid_status == "2")
+                            {
+
+                                command5 = new MySqlCommand("update " + TABLE_PRODUCTS + " set products_ordered = products_ordered + 1 where products_id = '" + products_id.ToString() + "'", myConn);
+                                command5.ExecuteNonQuery();
+                                command5.Dispose();
+                            }
                         }
-                    }
-                     
+                              
             }
             catch (Exception e)
             {
