@@ -111,6 +111,7 @@ namespace BlueDolphin.Renewal
         public static string DEFAULT_ORDERS_STATUS_ID = "null";
         public static string RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = "0";
         public static string DEFAULT_RENEWAL_CHARGE_DAYS = "0";
+        public static string DEFAULT_RENEWAL_LEADTIME;
         public static string MODULE_PAYMENT_PAYFLOWPRO_USER = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_VENDOR = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PARTNER = string.Empty;
@@ -248,6 +249,7 @@ namespace BlueDolphin.Renewal
         private static string the_code;
         private static string renewal_fulfillment_delay;
         private static string fulfillment_delay_batch_week;
+        private static string update_fulfill_fields;
         private static DateTime fulfillment_delay_batch_date;
         private static string fulfillment_current_batch_week;
         private static DateTime fulfillment_current_batch_date;
@@ -1801,14 +1803,18 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static DateTime get_renewal_date(int orders_id)
+        private static string get_renewal_date(int orders_id)
         {
             try
             {
+                string renewal_lead_time;
+                DateTime renewal_date;
+                int skus_days_spanned;
+
                 if (orders_id.ToString() == string.Empty)
                 {
 
-
+                    return null;
                 }
 
                 command = new MySqlCommand(string.Empty, myConn);
@@ -1833,12 +1839,38 @@ namespace BlueDolphin.Renewal
 			            and fb.fulfillment_status_id = 1
 			            and op.products_id = p.products_id
 			            and op.skus_id = s.skus_id
-			            and o.orders_id = '" + orders_id + @"'
+			            and o.orders_id = '" + orders_id.ToString() + @"'
 		            order by fbi.date_added desc
 		            limit 1";
 
                 command.ExecuteNonQuery();
+                MySqlDataReader read;
+                read = command.ExecuteReader();
+                while (read.Read())
+                {
 
+                    skus_days_spanned = Convert.ToInt32(read["skus_days_spanned"]);
+
+                }
+                //first check sku, then product finally use default renewal lead time.
+                if (Convert.ToInt32(read["skus_renewal_lead_time"]) != 0) {
+
+                    renewal_lead_time = read["products_renewal_lead_time"].ToString();
+
+                }
+                else
+                {
+
+                    renewal_lead_time = DEFAULT_RENEWAL_LEADTIME;
+
+                }
+                if (read["skus_type"].ToString() == "INTRO")
+                {
+
+                    //renewal notice date for new orders is date paid + days_spanned - leadtime
+                    renewal_date = DateTime.Parse(read["date_paid"]);
+                    renewal_date = renewal_date.AddDays(skus_days_spanned);
+                }
                 return DateTime.Now;
             }
             catch (Exception e)
@@ -2556,6 +2588,7 @@ namespace BlueDolphin.Renewal
                                 command5 = new MySqlCommand(batch_items_query2, myConn);
                                 command5.ExecuteNonQuery();
                                 command5.Dispose();
+                                update_orders_fulfillment_status_id = false;
 
                             }
                             else
@@ -2579,6 +2612,27 @@ namespace BlueDolphin.Renewal
                             command5.Dispose();
                         }
 
+                        //In most cases we need to update the order to reflect the newly created batch_id
+                        //but with address change within same batch week we don't have to since
+                        //the last status should revert back to the original. So we can save an update here.
+                        if (update_orders_fulfillment_status_id)
+                        {
+                            //only if this is a fulfill status go ahead and set the right delivery_range and renewal notice date.
+                            //this is done here since renewals are delayed and might not get paid when we charge them (track2)
+                            //so when we call this function with a fulfill_id we konw it was paid and ready for fulfillment.
+
+                            update_fulfill_fields = string.Empty;
+                            if (fulfillment_status_id == FULFILLMENT_FULFILL_ID)
+                            {
+                                //Update the orders' end_delivery_range date
+                                //also set the renew_date.
+                                //also update the order's renewal_transactions_date so it won't get pulled again.
+                                //this is being added in the update stmt below.
+                                update_fulfill_fields = ", renewal_transaction_date = null, end_delivery_range = '" + get_end_delivery_range(first_issue_delay_days) + "', renewal_date='" + get_renewal_date(orders_id) + "' ";
+
+                            }
+
+                        }
                     }
                      
             }
@@ -3279,6 +3333,7 @@ namespace BlueDolphin.Renewal
                 DEFAULT_RETRY_RENEWAL_CHARGE_DAYS = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_RETRY_RENEWAL_CHARGE_DAYS" select (string)dr["configuration_value"]).FirstOrDefault());
                 MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault());
                 SEND_EMAILS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "SEND_EMAILS" select (string)dr["configuration_value"]).FirstOrDefault();
+                DEFAULT_RENEWAL_LEADTIME = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_RENEWAL_LEADTIME" select (string)dr["configuration_value"]).FirstOrDefault(); ;
                 pfpro_defaulthost = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_defaultport = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_HOSTPORT" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_defaulttimeout = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_TIMEOUT" select (string)dr["configuration_value"]).FirstOrDefault();
@@ -3299,6 +3354,54 @@ namespace BlueDolphin.Renewal
 
             }
 
+
+        }
+
+        private static string get_end_delivery_range(int firstIssueDelayDays)
+        {
+            try
+            {
+                fulfillment_delay_batch_week_array = new DataTable();
+                fulfillment_delay_batch_week_array = get_fulfillment_batch_week(renewal_fulfillment_delay);
+               
+                fulfillment_delay_batch_date = Convert.ToDateTime((from DataRow dr in fulfillment_delay_batch_week_array.Rows select (DateTime)dr["fulfillment_batch_date"]).FirstOrDefault());
+                if (first_issue_delay_days > 0)
+                {
+                    int yearf = Convert.ToInt32(fulfillment_delay_batch_date.ToString().Substring(0,4));
+                    int monthf = Convert.ToInt32(fulfillment_delay_batch_date.ToString().Substring(5, 2));
+                    int dayf = Convert.ToInt32(fulfillment_delay_batch_date.ToString().Substring(8, 2));
+                    int hourf = Convert.ToInt32(fulfillment_delay_batch_date.ToString().Substring(11, 2));
+                    int minutef = Convert.ToInt32(fulfillment_delay_batch_date.ToString().Substring(14, 2));
+                    int secondf = Convert.ToInt32(fulfillment_delay_batch_date.ToString().Substring(17, 2));
+
+                    //Calcuate the last day of the expected first issue date range.
+                    //The batch_date + 3 gets to Wednesday when orders are sent for fulfillment.
+                    //The first day of the range is the fulfillment day + the delay days.
+                    //10 days is added for the last day of the date range.
+                    DateTime origin = new DateTime(yearf, monthf, dayf, hourf, minutef, secondf);
+                    DateTime origin2 = new DateTime(1970, 1, 1);
+                    origin = origin.AddSeconds(86400 * (first_issue_delay_days + 13));
+                    TimeSpan end_delivery_range_date = origin - origin2;
+                    int totSeconds = Convert.ToInt32(end_delivery_range_date.TotalSeconds);
+                    origin2 = origin2.AddSeconds(totSeconds);
+                  
+                    return origin2.ToString("yyyy-MM-dd HH:mm:ss");
+                    
+                   // end_delivery_range_date.
+                }
+                else
+                {
+                    return string.Empty;
+
+                }
+                
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+                return string.Empty;
+            }
 
         }
     }
