@@ -25,7 +25,6 @@ namespace BlueDolphin.Renewal
     {
         //debug variable
         public static bool Debug = true;
-
         // define the database table names used in the project
         public static string TABLE_ADDRESS_BOOK = "address_book";
         public static string TABLE_ADDRESS_FORMAT = "address_format";
@@ -318,39 +317,35 @@ namespace BlueDolphin.Renewal
 
                 //set up logging of script to file
                 Console.WriteLine("Begin renewal main" + "\n");
-                //log_renewal_process("Begin renewal main");
+                log_renewal_process("Begin renewal main");
                 email_body += "Begin renewal main \n\n";
-
                 Console.WriteLine("Begin init_renewal_orders");
-                //log_renewal_process("Begin init_renewal_orders");
+                log_renewal_process("Begin init_renewal_orders");
                 number_of_renewal_orders_created = init_renewal_orders();
                 Console.WriteLine("End init_renewal_orders. number of renewal orders created: " +
                                   number_of_renewal_orders_created.ToString() + "\n");
-                //log_renewal_process("End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString());
+                log_renewal_process("End init_renewal_orders. number of renewal orders created: " + number_of_renewal_orders_created.ToString());
                 email_body += "End init_renewal_orders. number of renewal orders created: " +
                               number_of_renewal_orders_created.ToString() + "\n\n";
-
                 //let"s charge first since if it fails we can create the 1015 right after this.
                 Console.WriteLine("Begin charging renewal orders");
-                //log_renewal_process("Begin charging renewal orders");
+                log_renewal_process("Begin charging renewal orders");
                 number_of_renewal_orders_charged = charge_renewal_orders();
                 Console.WriteLine("End charging renewal orders. number of renewal orders charged: " +
                                   number_of_renewal_orders_charged.ToString() + "\n");
-                //log_renewal_process("End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString());
+                log_renewal_process("End charging renewal orders. number of renewal orders charged: " + number_of_renewal_orders_charged.ToString());
                 email_body += "End charging renewal orders. number of renewal orders charged: " +
                               number_of_renewal_orders_charged.ToString() + "\n\n";
-
                 Console.WriteLine("Begin creating renewal invoices");
-                //log_renewal_process("Begin creating renewal invoices");
+                log_renewal_process("Begin creating renewal invoices");
                 number_of_renewal_invoices_created = create_first_effort_renewal_invoices();
                 Console.WriteLine("End creating renewal invoices. number of renewal invoices created: " +
                                   number_of_renewal_invoices_created.ToString() + "\n");
-                //log_renewal_process("End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString());
+                log_renewal_process("End creating renewal invoices. number of renewal invoices created: " + number_of_renewal_invoices_created.ToString());
                 email_body += "End creating renewal invoices. number of renewal invoices created: " +
                               number_of_renewal_invoices_created.ToString() + "\n\n";
-
                 Console.WriteLine("Begin creating additional renewal invoices");
-                //log_renewal_process("Begin creating additional renewal invoices");
+                log_renewal_process("Begin creating additional renewal invoices");
                 number_of_additional_renewal_invoices_created = create_additional_renewal_invoices();
                 Console.WriteLine(
                     "End creating additional renewal invoices. number of additional renewal invoices created: " +
@@ -359,43 +354,39 @@ namespace BlueDolphin.Renewal
                 email_body +=
                     "End creating additional renewal invoices. number of additional renewal invoices created: " +
                     number_of_additional_renewal_invoices_created.ToString() + "\n\n";
-
                 Console.WriteLine("Begin sending renewal email invoices");
-                //log_renewal_process("Begin sending renewal email invoices");
+                log_renewal_process("Begin sending renewal email invoices");
                 number_of_renewal_email_invoices_sent = send_renewal_email_invoices();
                 Console.WriteLine("End sending renewal email invoices. number of renewal email invoices sent: " +
                                   number_of_renewal_email_invoices_sent.ToString() + "\n");
-                //log_renewal_process("End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString());
+                log_renewal_process("End sending renewal email invoices. number of renewal email invoices sent: " + number_of_renewal_email_invoices_sent.ToString());
                 email_body += "End sending renewal email invoices. number of renewal email invoices sent: " +
                               number_of_renewal_email_invoices_sent.ToString() + "\n\n";
-
                 Console.WriteLine("Begin creating renewal paper invoices file");
-                //log_renewal_process("Begin creating renewal paper invoices file");
+                log_renewal_process("Begin creating renewal paper invoices file");
                 number_of_renewal_paper_invoices_file_records = create_renewal_paper_invoices_file();
                 Console.WriteLine(
                     "End creating renewal paper invoices file. number of renewal paper invoices file records: " +
                     number_of_renewal_paper_invoices_file_records.ToString() + "\n");
-                //log_renewal_process("End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString());
+                log_renewal_process("End creating renewal paper invoices file. number of renewal paper invoices file records: " + number_of_renewal_paper_invoices_file_records.ToString());
                 email_body +=
                     "End creating renewal paper invoices file. number of renewal paper invoices file records: " +
                     number_of_renewal_paper_invoices_file_records.ToString() + "\n\n";
-
                 Console.WriteLine("Begin cleaning up renewal invoices");
-                //log_renewal_process("Begin cleaning up renewal invoices");
+                log_renewal_process("Begin cleaning up renewal invoices");
                 number_of_invoices_cleaned_up = clean_up_renewal_invoices();
                 Console.WriteLine("End cleaning up renewal invoices. number of renewal invoices cleaned up: " +
                                   number_of_invoices_cleaned_up.ToString() + "\n");
-                //log_renewal_process("End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString());
+                log_renewal_process("End cleaning up renewal invoices. number of renewal invoices cleaned up: " + number_of_invoices_cleaned_up.ToString());
                 email_body += "End cleaning up renewal invoices. number of renewal invoices cleaned up: " +
                               number_of_invoices_cleaned_up.ToString() + "\n\n";
-
                 //now see if we need to cancel any renewal orders.
                 Console.WriteLine("Begin mass cancelling renewal orders");
-                //log_renewal_process("Begin mass cancelling renewal orders");
+                log_renewal_process("Begin mass cancelling renewal orders");
                 number_of_renewal_orders_mass_cancelled = mass_cancel_renewal_orders();
                 Console.WriteLine("End mass cancelling renewal orders. number of renewal orders mass cancelled: " +
                                   number_of_renewal_orders_mass_cancelled.ToString() + "\n");
-                //log_renewal_process("End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString());
+                log_renewal_process("End mass cancelling renewal orders. number of renewal orders mass cancelled: " + number_of_renewal_orders_mass_cancelled.ToString());
                 email_body += "End mass cancelling renewal orders. number of renewal orders mass cancelled: " +
                               number_of_renewal_orders_mass_cancelled.ToString() + "\n\n";
 
@@ -455,11 +446,9 @@ namespace BlueDolphin.Renewal
 			        AND to_days(o.renewal_date) > to_days(DATE_SUB(curdate(),INTERVAL 60 DAY))
 			        AND to_days(o.renewal_date) <= to_days(curdate())
 	        ";
-
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = create_renewal_orders_query_string;
                 command.ExecuteNonQuery();
-
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
                 int num_orders = 0;
@@ -1848,16 +1837,13 @@ namespace BlueDolphin.Renewal
             try
             {
                 check_renewal_order_result = "true";
-
                 if (skus_status == 0)
                 {
                     string skus_status_check_query = "select * from skus where products_id = '" + products_id.ToString() +
                                                      "' and skus_type = 'RENEW' and skus_type_order = '" +
                                                      skus_type_order.ToString() + "' and skus_status = '1'";
-
                     command = new MySqlCommand(skus_status_check_query, myConn);
                     command.ExecuteNonQuery();
-
                     MySqlDataReader myReader;
                     myReader = command.ExecuteReader();
 
@@ -1888,7 +1874,6 @@ namespace BlueDolphin.Renewal
                     check_renewal_order_result = "This orders status is " + renewal_order_status.ToString() +
                                                  ". Only Pending orders are valid.";
                 }
-
                 // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
                 if (prior_orders_id.ToString() != "")
                 {
@@ -1960,16 +1945,12 @@ namespace BlueDolphin.Renewal
                     column_name = orders_products_columns[x].ToString();
                     renewal_order_product.Add(column_name, order[column_name]);
                 }
-
                 //creates the parent order number.
                 //and set it on the new order.
-
                 command = new MySqlCommand("insert into orders_groups (orders_groups_id) VALUES ('')", myConn);
                 command.ExecuteNonQuery();
-
                 int renewal_orders_groups_id = Convert.ToInt32(command.LastInsertedId);
                 renewal_order["orders_groups_id"] = renewal_orders_groups_id;
-
                 //If renewal cc data exists (renewal_payment_cards_id) on the original order, use it to set the cc fields for the renewal
                 if (renewal_order["renewal_payment_cards_id"].ToString() != string.Empty)
                 {
@@ -1987,11 +1968,9 @@ namespace BlueDolphin.Renewal
                 {
                     renewal_order["payment_method"] = "cc";
                 }
-
                 //get rid of the unwanted fields
                 renewal_order.Remove("orders_id");
                 renewal_order.Remove("renewal_payment_cards_id");
-
                 //THIS IS COMMENTED OUT SINCE IT SHOULD STAY A CC ORDER. IF IT IS A TRACK 2 IT WON'T GET PULLED
                 //FOR CHARGING AND IF CHECK COMES IN, CUSTCARE CAN CHANGE IT THERE TO A CHECK ENTRY.
                 //overwrite fields.
@@ -2106,19 +2085,16 @@ namespace BlueDolphin.Renewal
                     renewal_order_total["value"] = renewal_sku["skus_price"];
                     renewal_order_total["class"] = "ot_total";
                     renewal_order_total["sort_order"] = "800";
-
                     queryString =
                         tep_db_perform("orders_total", renewal_order_total);
                     command4 = new MySqlCommand(queryString, myConn);
                     command4.ExecuteNonQuery();
-
                     renewal_order_subtotal["orders_id"] = renewal_orders_id;
                     renewal_order_subtotal["title"] = "Sub-Total:";
                     renewal_order_subtotal["text"] = get_currency_format(renewal_sku["skus_price"].ToString(), renewal_order["currency"].ToString());
                     renewal_order_subtotal["value"] = renewal_sku["skus_price"];
                     renewal_order_subtotal["class"] = "ot_subtotal";
                     renewal_order_subtotal["sort_order"] = "1";
-
                     queryString = tep_db_perform("orders_total", renewal_order_subtotal);
                     command4 = new MySqlCommand(queryString, myConn);
                     command4.ExecuteNonQuery();
@@ -2127,13 +2103,11 @@ namespace BlueDolphin.Renewal
                 {
                     log_renewal_process("ERROR: Unable to create renewal order.", Convert.ToInt32(order["orders_id"]));
                 }
-
                 debug(renewal_order, "renewal_order");
                 debug(renewal_order_product, "renewal_order_product");
                 debug(renewal_order_total, "renewal_order_total");
                 debug(renewal_order_subtotal, "renewal_order_subtotal");
                 debug(order, "order");
-
                 return renewal_orders_id;
             }
             catch (Exception e)
@@ -2148,14 +2122,11 @@ namespace BlueDolphin.Renewal
             try
             {
                 //countries table, for each country name give us the country code.
-
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = "select * from countries";
                 command.ExecuteNonQuery();
-
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
-
                 countries = new Dictionary<string, object>();
                 zones = new Dictionary<string, object>();
                 configuration = new Dictionary<object, object>();
@@ -2164,9 +2135,7 @@ namespace BlueDolphin.Renewal
                 {
                     countries.Add(myReader["countries_name"].ToString(), myReader["countries_iso_code_3"]);
                 }
-
                 myReader.Close();
-
                 //state names are used in order, for paper invoices we need to look up abbreviation for these state names
                 command2 = new MySqlCommand(string.Empty, myConn);
                 command2.CommandText = "select * from zones";
@@ -2179,9 +2148,7 @@ namespace BlueDolphin.Renewal
                 {
                     zones.Add(myReader["zone_name"].ToString(), myReader["zone_code"]);
                 }
-
                 myReader2.Close();
-
                 //currencies
                 command3 = new MySqlCommand(string.Empty, myConn);
                 command3.CommandText = "select code, title, symbol_left, symbol_right, decimal_point, thousands_point, decimal_places, value from currencies";
@@ -2193,7 +2160,6 @@ namespace BlueDolphin.Renewal
                 {
                     da.Fill(currencies);
                 }
-
                 //configuration table
                 command4 = new MySqlCommand(string.Empty, myConn);
                 command4.CommandText = "select * from configuration";
@@ -2225,7 +2191,6 @@ namespace BlueDolphin.Renewal
                 }
 
                 myReader5.Close();
-
                 command6 = new MySqlCommand(string.Empty, myConn);
                 command6.CommandText = "show columns from orders_products";
                 command6.ExecuteNonQuery();
@@ -2255,12 +2220,10 @@ namespace BlueDolphin.Renewal
 
                 command7.ExecuteNonQuery();
                 renewals_billing_series_array = new DataTable();
-
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command7))
                 {
                     da.Fill(renewals_billing_series_array);
                 }
-
                 command8 = new MySqlCommand(string.Empty, myConn);
                 command8.CommandText = @"select * from skinsites";
                 command8.ExecuteNonQuery();
@@ -2271,7 +2234,6 @@ namespace BlueDolphin.Renewal
                 {
                     da.Fill(skinsites);
                 }
-
                 //setup the skinsite configurations
                 command9 = new MySqlCommand(string.Empty, myConn);
                 command9.CommandText =
@@ -2293,7 +2255,6 @@ namespace BlueDolphin.Renewal
 
         private static void log_renewal_process(string action, int orders_id)
         {
-
             try
             {
                 command = new MySqlCommand(string.Empty, myConn);
@@ -2333,10 +2294,8 @@ namespace BlueDolphin.Renewal
                 {
                     return;
                 }
-
                 string paid_status=string.Empty;
                 update_orders_fulfillment_status_id = true;
-
                 //should always just have 1 orders_producst row so limit by 1.
                 command =
                     new MySqlCommand(
@@ -2366,7 +2325,6 @@ namespace BlueDolphin.Renewal
                 }
               
                 order_product_info_array.Close();
-
                 //If the subscription is less than 6 months, only delay fulfillment to the next
                 //batch week.
 
@@ -2637,14 +2595,12 @@ namespace BlueDolphin.Renewal
             {
                 if (order["cc_number"].ToString() == string.Empty || order["cc_expires"].ToString() == string.Empty)
                 {
-
                     if (order["renewal_cc_number"].ToString() == string.Empty ||
                         order["renewal_cc_expires"].ToString() == string.Empty)
                     {
                         return false;
                     }
                 }
-
                 return true;
             }
             catch (Exception e)
@@ -2652,7 +2608,6 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return false;
             }
-
         }
 
         private static void debug(Dictionary<string, object> array, string name)
@@ -2690,7 +2645,6 @@ namespace BlueDolphin.Renewal
             try
             {
                 string val;
-
                 if (action == "insert")
                 {
                     query = "insert into " + table + "(";
@@ -2701,7 +2655,6 @@ namespace BlueDolphin.Renewal
                     }
 
                     query = query.Substring(0, query.Length - 2) + ") values (";
-
                     foreach (KeyValuePair<string, object> col in data)
                     {
                         val = col.Value.ToString();
@@ -2731,7 +2684,6 @@ namespace BlueDolphin.Renewal
                 else if (action == "replace")
                 {
                     query = "replace into " + table + " (";
-
                     foreach (KeyValuePair<string, object> col in data)
                     {
                         query += col.Key + ", ";
@@ -2760,7 +2712,6 @@ namespace BlueDolphin.Renewal
                 else if (action == "update")
                 {
                     query = "update " + table + " set ";
-
                     foreach (KeyValuePair<string, object> col in data)
                     {
                         val = col.Value.ToString();
@@ -2794,7 +2745,6 @@ namespace BlueDolphin.Renewal
             try
             {
                 string currency_format = string.Empty;
-
                 //get the currencies
                 var results = (from m in currencies.AsEnumerable()
                                where m.Field<string>("code") == currency_type
@@ -2803,10 +2753,8 @@ namespace BlueDolphin.Renewal
                 string decimalPoint = results["decimal_point"].ToString();
                 string thousandsPoint = results["thousands_point"].ToString();
                 string decimalPlaces = new String('0', Convert.ToInt32(results["decimal_places"]));
-
                 string getRoundedNum = tep_round(Convert.ToDouble(number) * Convert.ToInt32(results["value"]),
                     Convert.ToInt32(results["decimal_places"])).ToString();
-
                 getRoundedNum = Convert.ToDecimal(getRoundedNum).ToString("#,##0." + decimalPlaces);
                 getRoundedNum = getRoundedNum.Replace(",", thousandsPoint);
                 int lastDecimal = Convert.ToInt32(getRoundedNum.LastIndexOf("."));
@@ -2814,7 +2762,6 @@ namespace BlueDolphin.Renewal
 
                 currency_format = results["symbol_left"].ToString() +
                                    getRoundedNum + results["symbol_right"].ToString();
-
                 return currency_format;
             }
             catch (Exception e)
@@ -2840,9 +2787,7 @@ namespace BlueDolphin.Renewal
                     			      ORDER  BY fulfillment_batch_date ASC
                     				  LIMIT 1";
                 command.ExecuteNonQuery();
-
                 DataTable batch_week = new DataTable();
-
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command))
                 {
                     da.Fill(batch_week);
@@ -2862,7 +2807,6 @@ namespace BlueDolphin.Renewal
             try
             {
                 int num = number.ToString().Substring(number.ToString().IndexOf(".") + 1).Length;
-
                 if (number.ToString().IndexOf(".") != -1 && num > precision)
                 {
                     number = Convert.ToDouble(number.ToString().Substring(0, number.ToString().IndexOf(".") + 1 + 1 + precision));
@@ -2971,11 +2915,9 @@ namespace BlueDolphin.Renewal
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
         private static string get_pfp_pwd()
         {
@@ -2997,7 +2939,6 @@ namespace BlueDolphin.Renewal
 	            mcrypt_generic_deinit ($td);
 	            mcrypt_module_close ($td);
 	            return trim(chop($decrypted_data)); */
-
                 return key;
             }
             catch (Exception e)
@@ -3041,7 +2982,6 @@ namespace BlueDolphin.Renewal
 
         private static string encrypt_cc(int input, int customer_id)
         {
-
             try
             {
                 string key = get_key();
@@ -3061,7 +3001,6 @@ namespace BlueDolphin.Renewal
                         return trim(chop(base64_encode($encrypted_data)));
                  
                  */
-
                 return key;
             }
             catch (Exception e)
@@ -3075,16 +3014,15 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-                string ssId = skinsitesId.ToString().Replace("'", "\\'");
-                string qur = "select merchant_processor_reporting_group from " + TABLE_SKINSITES + " where skinsites_id = '" + ssId + "' ";
+                  string ssId = skinsitesId.ToString().Replace("'", "\\'");
+                  string qur = "select merchant_processor_reporting_group from " + TABLE_SKINSITES + " where skinsites_id = '" + ssId + "' ";
 
-                // Build query to retireve merchant processor reporting group.
-                command = new MySqlCommand(qur, myConn);
-                command.ExecuteNonQuery();
+                  // Build query to retireve merchant processor reporting group.
+                  command = new MySqlCommand(qur, myConn);
+                  command.ExecuteNonQuery();
 
                   MySqlDataReader myReader;
                   myReader = command.ExecuteReader();
-
                   if (myReader.HasRows)
                   {
                       while (myReader.Read())
@@ -3094,19 +3032,15 @@ namespace BlueDolphin.Renewal
                   }
                   else
                   {
-
                       return "";
                   }
-
                 return "";
             }
-
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
 
         private static Dictionary<string, object> pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
@@ -3222,16 +3156,12 @@ namespace BlueDolphin.Renewal
                     TimeSpan end_delivery_range_date = origin - origin2;
                     int totSeconds = Convert.ToInt32(end_delivery_range_date.TotalSeconds);
                     origin2 = origin2.AddSeconds(totSeconds);
-                  
                     return origin2.ToString("yyyy-MM-dd HH:mm:ss");
-                    
-                   // end_delivery_range_date.
                 }
                 else
                 {
                     return string.Empty;
                 }
-                
             }
             catch (Exception e)
             {
