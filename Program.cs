@@ -1958,18 +1958,14 @@ namespace BlueDolphin.Renewal
                         check_renewal_order_result = "No active renewal sku (type order " + skus_type_order.ToString() +
                                                      ") for products_id " + products_id.ToString();
                     }
-
                 }
-
                 //make sure this renewal order product's continuous service is still active and this renewal orders
                 //auto renew hasn't been changed.
                 if (continuous_service != 1)
                 {
-
                     check_renewal_order_result = "Continuous Service for products_id " + products_id.ToString() +
                                                  " is not 1.";
                 }
-
                 if (renewal_order_auto_renew != 1)
                 {
                     check_renewal_order_result = "Auto Renew for this order is not 1.";
@@ -1983,7 +1979,6 @@ namespace BlueDolphin.Renewal
                 // Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
                 if (prior_orders_id.ToString() != "")
                 {
-
                     command =
                         new MySqlCommand("select * from orders where orders_id = '" + prior_orders_id.ToString() + "'",
                             myConn);
@@ -1993,10 +1988,8 @@ namespace BlueDolphin.Renewal
 
                     while (myReader.Read())
                     {
-
                         prior_order_status = Convert.ToInt32(myReader["orders_status"]);
                         prior_order_auto_renew = Convert.ToInt32(myReader["auto_renew"]);
-
                     }
 
                     //if the original order isn't a Paid order (cancelled or disputed) go on to the next order.
@@ -2012,16 +2005,12 @@ namespace BlueDolphin.Renewal
                                                      prior_orders_id.ToString() + ") is not 1.";
                     }
                 }
-
                 return check_renewal_order_result;
             }
-
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-
                 return string.Empty;
-
             }
         }
 
@@ -2051,14 +2040,12 @@ namespace BlueDolphin.Renewal
                 {
                     column_name = orders_columns[i].ToString();
                     renewal_order.Add(column_name, order[column_name]);
-
                 }
 
                 for (int x = 0; x < j; x++)
                 {
                     column_name = orders_products_columns[x].ToString();
                     renewal_order_product.Add(column_name, order[column_name]);
-
                 }
 
                 //creates the parent order number.
@@ -2080,7 +2067,6 @@ namespace BlueDolphin.Renewal
                     renewal_order["cc_number_display"] = order["renewal_cc_number_display"];
                     renewal_order["payment_cards_id"] = order["renewal_payment_cards_id"];
                     renewal_order["payment_method"] = "cc";
-
                 }
 
                 // Account for "partner_paid" orders by setting them to "cc" for the renewal order (MCS 3/2015)
@@ -2139,7 +2125,6 @@ namespace BlueDolphin.Renewal
 
                 if (is_postcard_confirmation == 1)
                 {
-
                     renewal_order["is_postcard_confirmation"] = "1";
                     //if (is_postcard_confirmation == 1)
                     renewal_order["postcard_confirmation_date"] = "now()";
@@ -2160,17 +2145,13 @@ namespace BlueDolphin.Renewal
                 {
                     if (is_postcard_confirmation == 1)
                     {
-
                         renewal_order["renewal_transaction_date"] = "date_add(now(), INTERVAL " +
                                                                     RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS + " DAY)";
-
                     }
                     else
                     {
-
                         renewal_order["renewal_transaction_date"] = "date_add(now(), INTERVAL " +
                                                                     DEFAULT_RENEWAL_CHARGE_DAYS + " DAY)";
-
                     }
                 }
 
@@ -2228,8 +2209,6 @@ namespace BlueDolphin.Renewal
                     queryString = tep_db_perform("orders_total", renewal_order_subtotal);
                     command4 = new MySqlCommand(queryString, myConn);
                     command4.ExecuteNonQuery();
-
-
                 }
                 else
                 {
@@ -2248,16 +2227,13 @@ namespace BlueDolphin.Renewal
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
         }
 
         private static void set_all_defines()
         {
-
             try
             {
-
                 //countries table, for each country name give us the country code.
 
                 command = new MySqlCommand(string.Empty, myConn);
@@ -2274,7 +2250,6 @@ namespace BlueDolphin.Renewal
                 while (myReader.Read())
                 {
                     countries.Add(myReader["countries_name"].ToString(), myReader["countries_iso_code_3"]);
-
                 }
 
                 myReader.Close();
@@ -2290,7 +2265,6 @@ namespace BlueDolphin.Renewal
                 while (myReader2.Read())
                 {
                     zones.Add(myReader["zone_name"].ToString(), myReader["zone_code"]);
-
                 }
 
                 myReader2.Close();
@@ -2305,11 +2279,9 @@ namespace BlueDolphin.Renewal
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command3))
                 {
                     da.Fill(currencies);
-
                 }
 
                 //configuration table
-
                 command4 = new MySqlCommand(string.Empty, myConn);
                 command4.CommandText = "select * from configuration";
                 command4.ExecuteNonQuery();
@@ -2317,11 +2289,9 @@ namespace BlueDolphin.Renewal
                 MySqlDataReader myReader4;
                 myReader4 = command4.ExecuteReader();
 
-
                 while (myReader4.Read())
                 {
                     configuration.Add(myReader4["configuration_key"], myReader4["configuration_value"]);
-
                 }
 
                 myReader4.Close();
@@ -2336,11 +2306,9 @@ namespace BlueDolphin.Renewal
                 MySqlDataReader myReader5;
                 myReader5 = command5.ExecuteReader();
 
-
                 while (myReader5.Read())
                 {
                     orders_columns.Add(myReader5["field"].ToString());
-
                 }
 
                 myReader5.Close();
@@ -2356,7 +2324,6 @@ namespace BlueDolphin.Renewal
                 while (myReader6.Read())
                 {
                     orders_products_columns.Add(myReader6["field"].ToString());
-
                 }
 
                 myReader6.Close();
@@ -2379,7 +2346,6 @@ namespace BlueDolphin.Renewal
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command7))
                 {
                     da.Fill(renewals_billing_series_array);
-
                 }
 
                 command8 = new MySqlCommand(string.Empty, myConn);
@@ -2391,7 +2357,6 @@ namespace BlueDolphin.Renewal
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command8))
                 {
                     da.Fill(skinsites);
-
                 }
 
                 //setup the skinsite configurations
@@ -2400,22 +2365,17 @@ namespace BlueDolphin.Renewal
                     @"select cs.skinsites_id, c.configuration_key as cfgKey, c.configuration_value as cfgValue, cs.skinsites_configuration_value from configuration c, configuration_skinsites cs where cs.configuration_id = c.configuration_id";
                 command9.ExecuteNonQuery();
 
-
                 skinsites_configuration_defines = new DataTable();
 
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command9))
                 {
                     da.Fill(skinsites_configuration_defines);
-
                 }
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-
             }
-
         }
 
         private static void log_renewal_process(string action, int orders_id)
@@ -2423,40 +2383,31 @@ namespace BlueDolphin.Renewal
 
             try
             {
-
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText =
                     "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " +
                     orders_id.ToString() + ")";
                 command.ExecuteNonQuery();
-
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-
             }
         }
 
         private static void log_renewal_process(string action)
         {
-
             try
             {
-
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText =
                     "insert into renewal_process_log(date_entered, action, orders_id) values (now(), " + action + ", " +
                     string.Empty + ")";
                 command.ExecuteNonQuery();
-
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-
             }
         }
 
@@ -2465,7 +2416,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 if (orders_id.ToString() == "" || fulfillment_status_id.ToString() == "")
                 {
                     return;
@@ -2500,7 +2450,6 @@ namespace BlueDolphin.Renewal
                     days_spanned = Convert.ToInt32(order_product_info_array["skus_days_spanned"]);
                     order_fulfillment_batch_id = Convert.ToInt32(order_product_info_array["fulfillment_batch_id"]);
                     date_purchased = Convert.ToDateTime(order_product_info_array["date_purchased"]);
-
                 }
               
                 order_product_info_array.Close();
@@ -2511,7 +2460,6 @@ namespace BlueDolphin.Renewal
                 // If there is a previous order id, use the previous orders skus_days_spanned
                 if (prior_orders_id.ToString() != string.Empty)
                 {
-
                     command5 = new MySqlCommand("select s.skus_days_spanned from " + TABLE_SKUS + " s,  " + TABLE_ORDERS_PRODUCTS + " op where s.products_id = op.products_id AND op.orders_id = '" + prior_orders_id.ToString() + "'", myConn);
                     command5.ExecuteNonQuery();
                     command5.Dispose();
@@ -2520,9 +2468,7 @@ namespace BlueDolphin.Renewal
 
                     while (prior_order.Read())
                     {
-
                         days_spanned = Convert.ToInt32(prior_order["skus_days_spanned"]);
-
                     }
                 }
 
@@ -2534,7 +2480,6 @@ namespace BlueDolphin.Renewal
                     {
                         renewal_fulfillment_delay = "DATE_ADD('" + date_purchased.ToString() + "' ,INTERVAL 84 DAY)";
                     }
-
 
                     fulfillment_delay_batch_week_array = new DataTable();
                     fulfillment_delay_batch_week_array = get_fulfillment_batch_week(renewal_fulfillment_delay);
@@ -2603,7 +2548,6 @@ namespace BlueDolphin.Renewal
                             order_fulfillment_batch_array = command5.ExecuteReader();
                             while (order_fulfillment_batch_array.Read())
                             {
-
                                 order_fulfillment_batch_week = order_fulfillment_batch_array["fulfillment_batch_week"].ToString();
                                 order_fulfillment_status_id = Convert.ToInt32(order_fulfillment_batch_array["fulfillment_status_id"]);
                             }
@@ -2619,7 +2563,6 @@ namespace BlueDolphin.Renewal
                             //add back in that batch week.
                             if (order_fulfillment_status_id != Convert.ToInt32(FULFILLMENT_CHANGE_ADDRESS_ID) && Convert.ToInt32(order_fulfillment_batch_week) >= Convert.ToInt32(fulfillment_batch_week))
                             {
-
                                 sql_data_array = new Dictionary<string, object>();
                                 sql_data_array["date_added"] = "now()";
                                 sql_data_array["fulfillment_batch_id"] = order_fulfillment_batch_id;
@@ -2629,7 +2572,6 @@ namespace BlueDolphin.Renewal
                                 command5.ExecuteNonQuery();
                                 command5.Dispose();
                                 update_orders_fulfillment_status_id = false;
-
                             }
                             else
                             {
@@ -2644,7 +2586,6 @@ namespace BlueDolphin.Renewal
                                 command5 = new MySqlCommand(batch_items_query2, myConn);
                                 command5.ExecuteNonQuery();
                                 command5.Dispose();
-
                             }
                             //Add in the previous_address_book_id to the batch_item. Used to display on orders.
                             command5 = new MySqlCommand("update fulfillment_batch_items fbi, orders o set fbi.previous_delivery_address_book_id = o.previous_delivery_address_book_id where fbi.orders_id = o.orders_id and fbi.fulfillment_batch_items_id = '" + fulfillment_batch_items_id.ToString() + "'", myConn);
@@ -2670,7 +2611,6 @@ namespace BlueDolphin.Renewal
                                 //also update the order's renewal_transactions_date so it won't get pulled again.
                                 //this is being added in the update stmt below.
                                 update_fulfill_fields = ", renewal_transaction_date = null, end_delivery_range = '" + get_end_delivery_range(first_issue_delay_days) + "', renewal_date='" + get_renewal_date(orders_id) + "' ";
-
                             }
 
                             //Now add the last status to the order.fulfillment_batch_id field. Used in fulfillment process.
@@ -2696,7 +2636,6 @@ namespace BlueDolphin.Renewal
 
                             while (orders_paid_fetch.Read())
                             {
-
                                 paid_status = orders_paid_fetch["orders_status"].ToString();
                             }
 
@@ -2705,18 +2644,15 @@ namespace BlueDolphin.Renewal
 
                             if (paid_status == "2")
                             {
-
                                 command5 = new MySqlCommand("update " + TABLE_PRODUCTS + " set products_ordered = products_ordered + 1 where products_id = '" + products_id.ToString() + "'", myConn);
                                 command5.ExecuteNonQuery();
                                 command5.Dispose();
                             }
-                        }
-                              
+                        }        
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-
             }
         }
 
@@ -2765,7 +2701,6 @@ namespace BlueDolphin.Renewal
 
                         fulfillmentBatchId = Convert.ToInt32(bId["fulfillment_batch_id"]);
                     }
-
                     bId.Close();
                     command5.Dispose();
                 }
@@ -2774,17 +2709,13 @@ namespace BlueDolphin.Renewal
                     //no error,so get the new id.
                     fulfillmentBatchId = Convert.ToInt32(command5.LastInsertedId);
                 }
-
                 return fulfillmentBatchId;
-
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return 0;
             }
-
         }
 
         private static bool isPerfectRenewal(Dictionary<string, object> order)
@@ -2803,37 +2734,18 @@ namespace BlueDolphin.Renewal
 
                 return true;
             }
-
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return false;
             }
 
         }
 
-        private static int tep_db_insert_id(string link = "db_link")
-        {
-            try
-            {
-
-                return 1;
-
-            }
-            catch (Exception e)
-            {
-
-                Console.WriteLine(e.Message);
-                return 0;
-            }
-        }
-
         private static void debug(Dictionary<string, object> array, string name)
         {
             try
             {
-
                 if (Debug != true)
                     return;
 
@@ -2851,16 +2763,12 @@ namespace BlueDolphin.Renewal
                     {
                         Console.WriteLine(name + "[" + KV.Key + "]=" + array[KV.Key].ToString() + "\n");
                     }
-
                 }
-
                 Console.WriteLine("\n");
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
-
             }
         }
 
@@ -2876,9 +2784,7 @@ namespace BlueDolphin.Renewal
 
                     foreach (KeyValuePair<string, object> col in data)
                     {
-
                         query += col.Key + ", ";
-
                     }
 
                     query = query.Substring(0, query.Length - 2) + ") values (";
@@ -2903,27 +2809,20 @@ namespace BlueDolphin.Renewal
                                 else
                                 {
                                     query += val.Replace("'", "\\'") + ", ";
-
                                 }
                                 break;
                         }
-
                     }
-
                     query += query.Substring(0, query.Length - 2) + ")";
-
                 }
                 else if (action == "replace")
                 {
-
                     query = "replace into " + table + " (";
 
                     foreach (KeyValuePair<string, object> col in data)
                     {
-
                         query += col.Key + ", ";
                     }
-
                     query = query.Substring(0, query.Length - 2) + ") values (";
 
                     foreach (KeyValuePair<string, object> col in data)
@@ -2942,11 +2841,8 @@ namespace BlueDolphin.Renewal
                                 query += "\'" + val.Replace("'", "\\'") + "\', ";
                                 break;
                         }
-
                     }
-
                     query += query.Substring(0, query.Length - 2) + ")";
-
                 }
                 else if (action == "update")
                 {
@@ -2968,21 +2864,16 @@ namespace BlueDolphin.Renewal
                                 query += col.Key + " = \'" + val.Replace("'", "\\'") + "\', ";
                                 break;
                         }
-
                     }
-
                     query += query.Substring(0, query.Length - 2) + " where " + parameters;
                 }
-
                 return query;
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
 
         private static string get_currency_format(string number, string currency_type)
@@ -3015,7 +2906,6 @@ namespace BlueDolphin.Renewal
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
@@ -3025,7 +2915,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 if (compareDate == string.Empty)
                 {
                     compareDate = "now()";
@@ -3044,19 +2933,14 @@ namespace BlueDolphin.Renewal
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command))
                 {
                     da.Fill(batch_week);
-
                 }
-
                 return batch_week;
             }
-
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return null;
             }
-
         }
 
         // Wrapper function for round()
@@ -3064,7 +2948,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 int num = number.ToString().Substring(number.ToString().IndexOf(".") + 1).Length;
 
                 if (number.ToString().IndexOf(".") != -1 && num > precision)
@@ -3088,7 +2971,6 @@ namespace BlueDolphin.Renewal
                             number =
                                 Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString()) +
                                 0.1;
-
                         }
                         else
                         {
@@ -3096,15 +2978,12 @@ namespace BlueDolphin.Renewal
                                 Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length - 1).ToString()) +
                                 1;
                         }
-
                     }
                     else
                     {
                         number =
                             Convert.ToDouble(number.ToString().Substring(0, number.ToString().Length).ToString());
-
                     }
-
                 }
                 return number;
             }
@@ -3131,11 +3010,9 @@ namespace BlueDolphin.Renewal
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return false;
             }
-
         }
 
         private static string get_key()
@@ -3154,15 +3031,12 @@ namespace BlueDolphin.Renewal
                     sb.Append(hash[i].ToString("X2"));
                 }
                 return sb.ToString();
-
             }
             catch(Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
 
         private static string get_key(string ky)
@@ -3181,7 +3055,6 @@ namespace BlueDolphin.Renewal
                     sb.Append(hash[i].ToString("X2"));
                 }
                 return sb.ToString();
-
             }
             catch (Exception e)
             {
@@ -3193,7 +3066,6 @@ namespace BlueDolphin.Renewal
         }
         private static string get_pfp_pwd()
         {
-
             try
             {
                 string key = get_key();
@@ -3214,21 +3086,18 @@ namespace BlueDolphin.Renewal
 	            return trim(chop($decrypted_data)); */
 
                 return key;
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
 
         //$input - stuff to decrypt
         //$key - the secret key to use
         private static string decrypt_cc(int input, int customer_id)
         {
-
             try
             {
                 string key = get_key();
@@ -3249,14 +3118,12 @@ namespace BlueDolphin.Renewal
                  return trim(chop($decrypted_data)); */
 
                 return key;
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
 
         private static string encrypt_cc(int input, int customer_id)
@@ -3283,14 +3150,12 @@ namespace BlueDolphin.Renewal
                  */
 
                 return key;
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return e.Message;
             }
-
         }
 
         private static string get_merchant_processor_reporting_group(int skinsitesId)
@@ -3309,12 +3174,10 @@ namespace BlueDolphin.Renewal
 
                   if (myReader.HasRows)
                   {
-
                       while (myReader.Read())
                       {
                           return myReader["merchant_processor_reporting_group"].ToString();
                       }
-
                   }
                   else
                   {
@@ -3327,10 +3190,8 @@ namespace BlueDolphin.Renewal
 
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return e.Message;
-
             }
 
         }
@@ -3359,11 +3220,9 @@ namespace BlueDolphin.Renewal
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return null;
             }
-
         }
 
         private static DataTable get_configuration_values()
@@ -3377,19 +3236,14 @@ namespace BlueDolphin.Renewal
                  using (MySqlDataAdapter da = new MySqlDataAdapter(command))
                  {
                      da.Fill(configuration_values);
-
                  }
-
                 return configuration_values;
-
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return null;
             }
-
         }
 
         private static void set_config_values(DataTable config_dt)
@@ -3421,17 +3275,11 @@ namespace BlueDolphin.Renewal
                 PFPRO_EXE_PATH = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_EXE_PATH_D" select (string)dr["configuration_value"]).FirstOrDefault();
                 LD_LIBRARY_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_LD_LIBRARY_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
                 PFPRO_CERT_PATH_ENV = "PFPRO_CERT_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
-
             }
-
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
-
             }
-
-
         }
 
         private static string get_end_delivery_range(int firstIssueDelayDays)
@@ -3469,13 +3317,11 @@ namespace BlueDolphin.Renewal
                 else
                 {
                     return string.Empty;
-
                 }
                 
             }
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
                 return string.Empty;
             }
