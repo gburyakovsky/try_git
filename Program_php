@@ -1,0 +1,2353 @@
+<?php
+/*
+  $Id$
+
+  osCommerce, Open Source E-Commerce Solutions
+  http://www.oscommerce.com
+
+  Copyright (c) 2003 osCommerce
+
+  Released under the GNU General Public License
+
+  EXAMPLE USAGE (testing):
+  php.exe C:\Repository\Commands\BlueDolphin.Renewal.Command\renewals.php production=0 debug=0
+
+*/
+
+define('USE_PCONNECT', 'false'); // use persistent connections?
+define('DEFAULT_PENDING_COMMENT', 'Renewal Order has been created.');
+define('CHARSET', 'iso-8859-1');
+define('FULFILLMENT_FULFILL_ID', '1');
+define('FULFILLMENT_CHANGE_ADDRESS_ID', '2');
+define('FULFILLMENT_CANCEL_ID', '3');
+define('FULFILLMENT_IGNORE_FULFILLMENT_ID', '4');
+define('PAPER_INVOICE_DATE_FORMAT', 'Ymd_His');
+define('DEFAULT_COUNTRY_ID', '223');
+define('MODULE_PAYMENT_PAYFLOWPRO_TEXT_ERROR', 'Credit Card Error!');
+define('DATE_FORMAT_DB', '%Y-%m-%d %H:%M:%S');
+define('FILENAME_PRODUCT_INFO', 'product_info.php');
+
+//the following are defined in renewal_track_emails table.
+define('TRACK1', '1014');
+define('TRACK2_BAD_CC', '1015');
+define('TRACK2_CHECK', '1016');
+define('TRACK2_MC', '1017');
+define('TRACK2_PC', '1018');
+
+require('email.php');
+require('mime.php');
+require('database_tables.php');
+require('currencies.php');
+
+//$test2=encrypt_cc('4111111111111111','221'); -valid
+
+//$test=encrypt_cc('4457000100000000','221'); -invalid
+
+$arg_error = false;
+if ($argc != 3 || in_array($argv[1], array('--help', '-help', '-h', '-?'))) {
+	$arg_error = true;
+} else {
+	if (strpos($argv[1], '=') === false) {
+		$arg_error = true;
+	} else {
+		list($production_argument_name, $production_argument_value) = explode('=', $argv[1]);
+		if ($production_argument_name != 'production' || ($production_argument_value != 0 && $production_argument_value != 1)) {
+			$arg_error = true;
+		}
+	}
+	if (strpos($argv[2], '=') === false) {
+		$arg_error = true;
+	} else {
+		list($test_argument_name, $debug_argument_value) = explode('=', $argv[2]);
+		if ($test_argument_name != 'debug' || ($debug_argument_value != 0 && $debug_argument_value != 1)) {
+			$arg_error = true;
+		}
+	}
+	if (!$arg_error) {
+		if ($production_argument_value == 1) {
+			define('DB_SERVER', 'prod-mysql.m2mediagroup.net'); // eg, localhost - should not be empty for productive servers
+			define('DB_SERVER_USERNAME', 'bdgweb_bdgprod');
+			define('DB_SERVER_PASSWORD', 'f1shpr0d');
+			define('DB_DATABASE', 'bdgweb_oscsmartsubinnodb');
+		} else {
+			define('DB_SERVER', 'stage-mysql.m2mediagroup.net'); // eg, localhost - should not be empty for productive servers
+			define('DB_SERVER_USERNAME', 'bluedolphinstage');
+			define('DB_SERVER_PASSWORD', 'BlueDolphin01012008');
+			define('DB_DATABASE', 'bluedolphin_stage');
+		}
+		if ($debug_argument_value == 0) {
+			define('DEBUG', 'false');
+		} else {
+			define('DEBUG', 'true');
+		}
+	}
+}
+
+if ($arg_error) {
+	echo "This is the LIVE version of renewals, this script requires 2 arguments: production=1/0 and debug=1/0\n";
+	echo "There is not testing, make sure this is only used for live updates. Data will be updated even in debug mode.\n";
+	echo "To go live: production=1 and debug=0\n";
+	return;
+}
+
+main();
+
+function main() {
+	// Set our email body string for our e-mail to an empty string.
+	  $email_body = '';
+
+	//this allows the script to run without any maximum executiont time.
+	set_time_limit(0);
+
+	// make a connection to the database
+	tep_db_connect() or die('Unable to connect to database server!');
+	log_renewal_process('Begin renewal main');
+	$email_body .= "Begin renewal main \n\n";
+
+	set_all_defines();
+
+	log_renewal_process('Begin init_renewal_orders');
+	$number_of_renewal_orders_created = init_renewal_orders();
+	log_renewal_process('End init_renewal_orders. number of renewal orders created: ' . $number_of_renewal_orders_created);
+	$email_body .= "End init_renewal_orders. number of renewal orders created: $number_of_renewal_orders_created \n\n";
+
+	//let's charge first since if it fails we can create the 1015 right after this.
+	log_renewal_process('Begin charging renewal orders');
+	$number_of_renewal_orders_charged = charge_renewal_orders();
+	log_renewal_process('End charging renewal orders. number of renewal orders charged: ' . $number_of_renewal_orders_charged);
+	$email_body .= "End charging renewal orders. number of renewal orders charged: $number_of_renewal_orders_charged \n\n";
+
+	log_renewal_process('Begin creating renewal invoices');
+	$number_of_renewal_invoices_created = create_first_effort_renewal_invoices();
+	log_renewal_process('End creating renewal invoices. number of renewal invoices created: ' . $number_of_renewal_invoices_created);
+	$email_body .= "End creating renewal invoices. number of renewal invoices created: $number_of_renewal_invoices_created \n\n";
+
+	log_renewal_process('Begin creating additional renewal invoices');
+	$number_of_additional_renewal_invoices_created = create_additional_renewal_invoices();
+	log_renewal_process('End creating additional renewal invoices. number of additional renewal invoices created: ' . $number_of_additional_renewal_invoices_created);
+	$email_body .= "End creating additional renewal invoices. number of additional renewal invoices created: $number_of_additional_renewal_invoices_created \n\n";
+
+	log_renewal_process('Begin sending renewal email invoices');
+	$number_of_renewal_email_invoices_sent = send_renewal_email_invoices();
+	log_renewal_process('End sending renewal email invoices. number of renewal email invoices sent: ' . $number_of_renewal_email_invoices_sent);
+	$email_body .= "End sending renewal email invoices. number of renewal email invoices sent: $number_of_renewal_email_invoices_sent \n\n";
+
+	log_renewal_process('Begin creating renewal paper invoices file');
+	$number_of_renewal_paper_invoices_file_records = create_renewal_paper_invoices_file();
+	log_renewal_process('End creating renewal paper invoices file. number of renewal paper invoices file records: ' . $number_of_renewal_paper_invoices_file_records);
+	$email_body .= "End creating renewal paper invoices file. number of renewal paper invoices file records: $number_of_renewal_paper_invoices_file_records \n\n";
+
+	log_renewal_process('Begin cleaning up renewal invoices');
+	$number_of_invoices_cleaned_up = clean_up_renewal_invoices();
+	log_renewal_process('End cleaning up renewal invoices. number of renewal invoices cleaned up: ' . $number_of_invoices_cleaned_up);
+	$email_body .= "End cleaning up renewal invoices. number of renewal invoices cleaned up: $number_of_invoices_cleaned_up \n\n";
+
+	//now see if we need to cancel any renewal orders.
+	log_renewal_process('Begin mass cancelling renewal orders');
+	$number_of_renewal_orders_mass_cancelled = mass_cancel_renewal_orders();
+	log_renewal_process('End mass cancelling renewal orders. number of renewal orders mass cancelled: ' . $number_of_renewal_orders_mass_cancelled);
+	$email_body .= "End mass cancelling renewal orders. number of renewal orders mass cancelled: $number_of_renewal_orders_mass_cancelled \n\n";
+
+	log_renewal_process('End renewal main');
+	$email_body .= "End renewal main \n\n";
+
+	//Close the connection.
+	tep_db_close();
+
+	// Send e-mail saying we have completed the renewal run.
+	tep_mail('M2 Media Group Jobs', 'jobs@m2mediagroup.com', 'Renewal Process Successful', $email_body, 'BlueDolphin', 'jobs@m2mediagroup.com', '', '',false);
+	tep_mail('Michael Borchetta', 'mborchetta@m2mediagroup.com', 'Renewal Process Successful', $email_body, 'BlueDolphin', 'jobs@m2mediagroup.com', '', '',false);
+	tep_mail('Martin Schmidt', 'mschmidt@mcswebsolutions.com', 'Renewal Process Successful', $email_body, 'BlueDolphin', 'jobs@m2mediagroup.com', '', '',false);
+
+	return;
+}
+
+function tep_not_null($value) {
+	if (is_array($value)) {
+		if (sizeof($value) > 0) {
+			return true;
+		} else {
+			return false;
+		}
+	} else {
+		if ( (is_string($value) || is_int($value)) && ($value != '') && ($value != 'NULL') && (strlen(trim($value)) > 0)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+}
+
+function tep_convert_linefeeds($from, $to, $string) {
+	if ((PHP_VERSION < "4.0.5") && is_array($from)) {
+		return ereg_replace('(' . implode('|', $from) . ')', $to, $string);
+	} else {
+		return str_replace($from, $to, $string);
+	}
+}
+
+// For expiration dates. Added September 2012 (MCS)
+function is_date_stale($m,$y){
+	$t1 = strtotime($m . '/1/' . $y);
+	$t2 = date('m/t/Y',$t1);
+	$t = strtotime($t2);
+	$stale = (time() - $t > 0 ? true : false);
+	return $stale;
+}
+
+function charge_renewal_orders() {
+	global $is_gc_order;
+	//for windows we need to use the functions. On Unix this is compiled in.
+	if (IS_UNIX_ENVIRONMENT == 'false') {
+		include('php_pfpro.php');
+	}
+
+	//make sure we have sent them renewalinvoices
+	//eg IF orderItem.renewal_invoices_sent > 0 THEN
+	//
+	//if the charge fails we need to put the user in track 2 1015
+	//move all invoices from renewals_invoices to renewal_invoices_history with
+	//comments: Changed from 1014 to 1015.
+	//create new invoices based for 1015.
+	//make sure to update the order's renewals_billing_series_id to the new one.
+
+	//make sure the order is still PENDING, they might have paid already.
+
+	$charge_renewal_orders_query_string = "
+		select
+			sk.override_renewal_billing_descriptor,
+			o.*, op.*, s.*,
+			p.continuous_service,
+			p.products_status,
+			pd.products_billing_descriptor
+		from
+			orders o,
+			orders_products op,
+			products p,
+			products_description pd,
+			skus s,
+			skinsites sk
+		where
+			o.orders_id = op.orders_id
+			and sk.skinsites_id = o.skinsites_id
+			and op.products_id = p.products_id
+			and op.skus_id = s.skus_id
+			and o.is_renewal_order = 1
+			and o.renewal_transaction_date is not null
+			and o.renewal_error != 1
+			and to_days(o.renewal_transaction_date) > to_days(DATE_SUB(curdate(),INTERVAL 30 DAY))
+			and to_days(o.renewal_transaction_date) <= to_days(curdate())
+			and pd.products_id = op.products_id
+	";
+
+	$charge_renewal_orders_query = tep_db_query($charge_renewal_orders_query_string);
+	$number_of_renewal_charged = 0;
+
+	while ($charge_renewal_orders_info = tep_db_fetch_array($charge_renewal_orders_query)) {
+		$customers_id = $charge_renewal_orders_info['customers_id'];
+		$orders_id = $charge_renewal_orders_info['orders_id'];
+		$products_id = $charge_renewal_orders_info['products_id'];
+		$skus_type_order =$charge_renewal_orders_info['skus_type_order'];
+		$prior_orders_id = $charge_renewal_orders_info['prior_orders_id'];
+		$renewal_order_status = $charge_renewal_orders_info['orders_status'];
+		$skus_status = $charge_renewal_orders_info['skus_status'];
+		$continuous_service = $charge_renewal_orders_info['continuous_service'];
+		$auto_renew = $charge_renewal_orders_info['auto_renew'];
+		$renewal_orders_id = $charge_renewal_orders_info['orders_id'];
+		$renewal_invoices_created = $charge_renewal_orders_info['renewal_invoices_created'];
+		$renewal_invoices_sent = $charge_renewal_orders_info['renewal_invoices_sent'];
+		$final_price = $charge_renewal_orders_info['final_price'];
+		$cc_number = $charge_renewal_orders_info['cc_number'];
+		$cc_expires = $charge_renewal_orders_info['cc_expires'];
+		$email_address = $charge_renewal_orders_info['customers_email_address'];
+		$billing_first_name = $charge_renewal_orders_info['billing_first_name'];
+		$billing_last_name = $charge_renewal_orders_info['billing_last_name'];
+		$billing_address =  $charge_renewal_orders_info['billing_street_address'];
+		$billing_city = $charge_renewal_orders_info['billing_city'];
+		$billing_state = $charge_renewal_orders_info['billing_state'];
+		$billing_postcode = $charge_renewal_orders_info['billing_postcode'];
+		$billing_country =  $charge_renewal_orders_info['billing_country'];
+		$renewals_credit_card_charge_attempts = $charge_renewal_orders_info['renewals_credit_card_charge_attempts'] + 1;
+		$renewals_expiration_date_failures = $charge_renewal_orders_info['renewals_expiration_date_failures'];
+		$is_postcard_confirmation = $charge_renewal_orders_info['is_postcard_confirmation'];
+		$payment_cards_id = $charge_renewal_orders_info['payment_cards_id'];
+		$skinsites_id = $charge_renewal_orders_info['skinsites_id'];
+		$override_renewal_billing_descriptor = $charge_renewal_orders_info['override_renewal_billing_descriptor'];
+		$products_billing_descriptor = $charge_renewal_orders_info['products_billing_descriptor'];
+
+		// echo "Products Billing Descriptor Override: $override_renewal_billing_descriptor\n";
+
+		//if the expiration date is expired, we should increase by 1 year.
+		$cc_expires_year = substr($cc_expires, 2, 2);
+		$cc_expires_month = substr($cc_expires, 0, 2);
+
+		// Check to make sure our month and year are numeric.
+		if (!is_numeric($cc_expires_year)) {
+			$cc_expires_year = date('y');
+		}
+
+		if (!is_numeric($cc_expires_month)) {
+			$cc_expires_month = date('m');
+		}
+
+		// Check if our month is less than one. If so than make it 01.
+		if ($cc_expires_month < 1) {
+			$cc_expires_month = '01';
+		}
+
+		// Check if our month is greater than twelve. If so than make it 12.
+		if ($cc_expires_month > 12) {
+			$cc_expires_month = '12';
+		}
+
+		/* FORMER DATE MODS. Replaced in September 2012 (MCS)
+				// Check to see if our year is less than our current year. If so set to our current year.
+				if ($cc_expires_year < date('y')) {
+					$cc_expires_year = date('y');
+				}
+
+				// Check to see if our year is 10 greater than our current year. If so set to our current year.
+				if ($cc_expires_year > (date('y') + 10))
+				{
+					$cc_expires_year = date('y');
+				}
+
+				// Finally if it is our current year and our month is less than our current month than add one to our year.
+				if (($cc_expires_year == date('y')) && ($cc_expires_month < date('m'))) {
+					$cc_expires_year++;
+				}
+
+				// Add one less then our current attempt to the expiration year.
+				// We do this to increment our expiuration year by one for each attempt
+				// accept for our first attempt. We will not store this expiration date
+				// unless we succeed in charging the consumer.
+				$cc_expires_year += ($renewals_credit_card_charge_attempts - 1);
+		// END FORMER DATE MODS.*/
+
+		/* NEW DATE MODS. September 2012 (MCS) */
+		// If original expiration date failed in first charge attempt
+		if($renewals_expiration_date_failures == 1){
+			if(is_date_stale($cc_expires_month,$cc_expires_year)) $cc_expires_year = $cc_expires_year + 3;
+			if(is_date_stale($cc_expires_month,$cc_expires_year)) $cc_expires_year = date('y');
+		}
+		// If modified expiration date failed in second charge attempt
+		if($renewals_expiration_date_failures == 2){
+			if(is_date_stale($cc_expires_month,$cc_expires_year)) $cc_expires_year = $cc_expires_year + 2;
+			if(is_date_stale($cc_expires_month,$cc_expires_year)) $cc_expires_year = date('y') + 1;
+		}
+		/* END NEW DATE MODS. */
+		// Make sure our month and year are two digits.
+		$cc_expires_year = sprintf("%02d", $cc_expires_year);
+		$cc_expires_month = sprintf("%02d", $cc_expires_month);
+
+		// Reset our cc_expires date.
+		$cc_expires = $cc_expires_month . '' . 	$cc_expires_year;
+
+		//check to see if the order is still valid for charging
+		$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
+		if ($check_renewal_order_result !== true) {
+			//Since this isn't a valid renewal order anylonger, we don't charge, set the charge_date = null
+			//so it won't get pulled again.
+			tep_db_query("update orders set renewal_transaction_date = null where orders_id = '" . $renewal_orders_id . "'");
+
+			log_renewal_process("charge_renewal_orders(): Not charging this order, because " . $check_renewal_order_result, $renewal_orders_id);
+			continue;
+		}
+
+		if  ($renewal_invoices_created == 0 || $renewal_invoices_sent == 0) {
+			//Since the invoice was never created, we need to clean this order up.
+			tep_db_query("update orders set renewal_transaction_date = null where orders_id = '" . $renewal_orders_id . "'");
+
+			log_renewal_process("charge_renewal_orders(): Not charging this order, because the renewal_invoices_created was " .$renewal_invoices_created . " and renewal_invoices_sent is " .  $renewal_invoices_sent . ". Both need to be 1!", $renewal_orders_id);
+			continue;
+
+		}
+
+		//charge the card
+
+		//start by entering an new (empty) cc_transaction record to get
+		//a transaction_id that will be stored on the order record(s)
+		//we will update this table in the after_process().
+		$sql_data_array = array('cc_reference_id' => '',
+			'cc_auth_code' => '',
+			'cc_transactions_date' => 'now()');
+		tep_db_perform(TABLE_CC_TRANSACTIONS, $sql_data_array);
+		$cc_transactions_id = tep_db_insert_id();
+
+		//Add this cc_transaction to this order.
+		tep_db_query("INSERT INTO " . TABLE_CC_TRANSACTIONS_ORDERS . " (cc_transactions_id, orders_id) VALUES ('" . $cc_transactions_id. "', '" . $orders_id . "')");
+
+		//initialize pfpro
+		pfpro_init();
+		$countries_array = unserialize(COUNTRIES);
+		$billing_country_name = $countries_array[$billing_country];
+
+		$is_gc_order_returned = ($is_gc_order == true)? "True" : "False";
+
+		$transaction = array('USER'   => trim(MODULE_PAYMENT_PAYFLOWPRO_USER),
+			'VENDOR' => trim(MODULE_PAYMENT_PAYFLOWPRO_VENDOR),
+			'PARTNER' => trim(MODULE_PAYMENT_PAYFLOWPRO_PARTNER),
+			'PWD'        => trim(get_pfp_pwd()),
+			'TRXTYPE'    => trim(MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE),
+			'TENDER'     => trim(MODULE_PAYMENT_PAYFLOWPRO_TENDER),
+			'AMT'        => number_format($final_price, 2),
+			'ACCT'       => substr(decrypt_cc($cc_number, $customers_id), 0,19),
+			'EXPDATE'    => $cc_expires,
+			'FREIGHTAMT'    => '',
+			'TAXAMT'    => '',
+			'FIRSTNAME'    => $billing_first_name,
+			'LASTNAME'    => $billing_last_name,
+			'STREET'    => $billing_address,
+			'CITY'    => $billing_city,
+			'STATE'    => $billing_state,
+			'ZIP'    => $billing_postcode,
+			'COUNTRY'    => $billing_country_name,
+			'EMAIL'    => $email_address,
+			'IS_GC_ORDER'    => $is_gc_order_returned,
+			'SHIPTOFIRSTNAME'    => '',
+			'SHIPTOLASTNAME'    => '',
+			'SHIPTOSTREET'    => '',
+			'SHIPTOCITY'    =>'',
+			'SHIPTOSTATE'    => '',
+			'SHIPTOZIP'    => '',
+			'CVV2'        => '', //alonso correct field name is CVV2 not CSC!
+			'COMMENT1'   => $cc_transactions_id,
+			'ORDERSOURCE' => 'Recurring',
+			'CCTRANSACTIONID' => $cc_transactions_id,
+			'REPORTGROUP' => get_merchant_processor_reporting_group($skinsites_id),
+			'L_BDESCRIP_OVERRIDE' => $override_renewal_billing_descriptor
+			);
+
+		//setup the line items specific to First Data
+		$suffix = '1';
+		$transaction['L_QTY' . $suffix] = $charge_renewal_orders_info['products_quantity'];
+		$transaction['L_COMMCODE' . $suffix] = '';
+		$transaction['L_DESC' . $suffix] = $charge_renewal_orders_info['products_name'];
+		$transaction['L_BDESCRIP' . $suffix] = $charge_renewal_orders_info['products_billing_descriptor'];
+		$transaction['L_UOM' . $suffix] = '';
+		$transaction['L_COST' . $suffix] = number_format($charge_renewal_orders_info['products_price'], 2);
+		$transaction['L_PRODCODE' . $suffix] = $charge_renewal_orders_info['products_model'];
+		$transaction['L_DISCOUNT' . $suffix] = '';
+		$transaction['L_AMT' . $suffix] = number_format($final_price, 2);
+		$transaction['L_TAXAMT' . $suffix] =  number_format($charge_renewal_orders_info['products_tax'], 2);
+
+		debug($transaction, 'transaction');
+
+		putenv("PFPRO_CERT_PATH=" . MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV);
+
+		$response = pfpro_process($transaction,MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
+
+		if (DEBUG == 'true') { debug($response, 'payflowresponse'); }
+
+		// Up our counter for renewal_credit_card_charge_attempts by one.
+
+		tep_db_query("update orders set renewals_credit_card_charge_attempts = " . $renewals_credit_card_charge_attempts . " where orders_id = '" . $renewal_orders_id . "'");
+
+		// if we don't get a response the card might have been charged, need to check with Merchant Processor.
+		// if there was a good transaction, we will update the order status to 'Paid' and add the cc_reference_id to
+		// the transaction id from Merchant Processor, also amount_paid will be set and amount_owed will be set to 0.
+		// If there was no transaction or a bad one, we will update the order status to 'Cancel' since amount_paid wasn't updated
+		// it will not show up in the refund report.
+		//
+		if (isset($response['AUTHCODE'])) {
+			$authCode = $response['AUTHCODE'];
+		} else {
+			$authCode = '';
+		}
+		if (!$response) {
+
+			$the_code=$response['RESULT'];
+			//do nothing need to check with Merchant Processor and see if the cc was charged or not.
+			//Order stays in pending.
+
+			//update the order so it won't get pulled again.
+			tep_db_query("update orders set renewal_transaction_date = null where orders_id = '" . $orders_id . "'");
+		} elseif ($response['RESULT']!=0) {
+			//if there was  a response but it wasn't 0. Orders are set to Pending status, this is
+			//different from the live site, since we are not pushing this order into track to
+			//it needs to still Pending.
+			//update the orders' information. we are not using tep_is_valid_status_change
+			//because we know it is a valid change. We don't want admin to change Pend->Error.
+
+			$comments = substr(MODULE_PAYMENT_PAYFLOWPRO_TEXT_ERROR.' '.$response['RESPMSG'], 0, 255);
+
+			tep_db_query("update " . TABLE_CC_TRANSACTIONS . " set cc_reference_id = '" .$response['PNREF'] . "', cc_auth_code = '" . $authCode . "', cc_transactions_message= '" .  $response['RESULT'] . ':'. $response['RESPMSG'] . "' where cc_transactions_id = '" . (int)$cc_transactions_id . "'");
+
+
+
+			//check for the certain response codes, if it finds it push on through the recycling process
+			$the_code=$response['RESULT'];
+			$the_code=substr($the_code,0,3);
+			if($the_code=="501" || $the_code=="302" || $the_code=="301" || $the_code=="328" || $the_code=="327" || $the_code=="311" || $the_code=="326" || $the_code=="355" || $the_code=="610" || $the_code=="612" || $the_code=="611" || $the_code=="714" || $the_code=="716" || $the_code=="321" || $the_code=="330" || $the_code=="324" || $the_code=="310" || $the_code=="322" || $the_code=="304" || $the_code=="323" || $the_code=="303" || $the_code=="307" || $the_code=="325" || $the_code=="140" || $the_code=="713"){
+				$renewals_credit_card_charge_attempts=MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS;
+			}
+
+			// If there is an expiration date issue (added September 2012 - MCS):
+			if($the_code=="305"){
+				$renewals_expiration_date_failures++;
+				tep_db_query("update orders set renewals_expiration_date_failures = " . $renewals_expiration_date_failures . " where orders_id = '" . $orders_id . "'");
+			}
+
+
+
+
+			// If this was our last attempt than push into the next track otherwise queue it up for another try in the number of days specified by DEFAULT_RETRY_RENEWAL_CHARGE_DAYS in config.
+			// Last attempt is defined if the max renewal cc charge attempts or the max expiration failures is reached, both defined in config.
+			if ($renewals_credit_card_charge_attempts >= MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS || $renewals_expiration_date_failures >= MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES) {
+				if($is_postcard_confirmation){// IS A POSTCARD CONFIRMATION
+
+					//Change the billing series from 1014 to 1018.
+					//first set the old billing series to in_progress=0 so these will be cleaned up, and set comments.
+					tep_db_query("update renewals_invoices set in_progress = 0, comments = 'Charging was not successful, putting the order in postcard track 2 (was 1014 now 1018)' where orders_id = '" . $orders_id . "'");
+
+					//next change the order's renewal_billing_series to 1018, renewal_invoices_created and renewal_invoices_sent to 0. This will
+					//this will make sure the next time the orders get pulled for the next series.
+					tep_db_query("update orders set renewals_billing_series_id = '" . TRACK2_PC . "', renewal_invoices_sent = 0, renewal_invoices_created=0 where orders_id = '" . $orders_id . "'");
+
+				}else{ // IS NOT A POSTCARD CONFIRMATION
+
+					//Changing the billing series from 1014 to 1015.
+					//first set the old billing series to in_progress=0 so these will be cleaned up. and set comments.
+					tep_db_query("update renewals_invoices set in_progress = 0, comments = 'Charging was not successful, putting the order in track 2 (was 1014 now 1015)' where orders_id = '" . $orders_id . "'");
+
+					//next change the order's renewal_billing_series to 1015, renewal_invoices_created and renewal_invoices_sent to 0. This will
+					//this will make sure the next time the orders get pulled for the next series.
+					tep_db_query("update orders set renewals_billing_series_id = '" . TRACK2_BAD_CC . "', renewal_invoices_sent = 0, renewal_invoices_created=0 where orders_id = '" . $orders_id . "'");
+
+				}
+
+				//update the order so it won't get pulled again.
+				tep_db_query("update orders set renewal_transaction_date = null where orders_id = '" . $orders_id . "'");
+			} else {
+				// When setting the renewal_tranaction_date calculate as follows: Take the current date and time and
+				// add the value from the configuration key RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS.
+				// UPDATE 3/16/2012 (MCS): Removing logic to differentiate PostCards. All renewal_transaction_dates should use the DEFAULT_RETRY_RENEWAL_CHARGE_DAYS
+				/* OLD:
+						if($is_postcard_confirmation){
+							tep_db_query("update orders set renewal_transaction_date = date_add(curdate(), INTERVAL " . RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS . " DAY) where orders_id = '" . $renewal_orders_id . "'");
+						}else{
+							tep_db_query("update orders set renewal_transaction_date = date_add(renewal_transaction_date, INTERVAL " . DEFAULT_RETRY_RENEWAL_CHARGE_DAYS . " DAY) where orders_id = '" . $renewal_orders_id . "'");
+						}
+				*/
+				// NEW:
+				tep_db_query("update orders set renewal_transaction_date = date_add(renewal_transaction_date, INTERVAL " . DEFAULT_RETRY_RENEWAL_CHARGE_DAYS . " DAY) where orders_id = '" . $renewal_orders_id . "'");
+			}
+
+		} else {
+			//On success update status, save the Response Message as part of the status change and
+			//update cc_transactions table.
+			//set the amount_owed to 0 and amount_paid to amount_owed.
+			$comments = substr($response['RESULT'] . ':'. $response['RESPMSG'], 0, 255);
+			$customer_notification = (SEND_EMAILS == 'true') ? '1' : '0';
+
+			//enter the order into batch_item for fulfillment.
+			create_fulfillment_batch_item($orders_id, FULFILLMENT_FULFILL_ID);
+
+			tep_db_query("update " . TABLE_ORDERS . " set amount_paid = amount_owed, amount_owed = 0, orders_status = '" . (int)MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID . "' where orders_id = '" . (int)$orders_id . "'");
+			tep_db_query("insert into " . TABLE_ORDERS_STATUS_HISTORY . " (orders_id, orders_status_id, date_added, customer_notified, comments) values ('" . (int)$orders_id . "', '" . (int)MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID . "', now(), '" . $customer_notification . "', '" . tep_db_input($comments)  . "')");
+
+
+			tep_db_query("update " . TABLE_CC_TRANSACTIONS . " set cc_reference_id = '" .$response['PNREF'] . "', cc_auth_code = '" . $authCode . "', cc_transactions_message= '" .  $response['RESULT'] . ':'. $response['RESPMSG'] . "' where cc_transactions_id = '" . (int)$cc_transactions_id . "'");
+
+			// Update our renewal orders cc expiration date.
+			tep_db_query("update orders set cc_expires = '" . $cc_expires . "' where orders_id = '" . $renewal_orders_id . "'");
+
+			// Update the associated payment card details expiration date as well.
+			tep_db_query("update payment_cards set cc_expires = '" . $cc_expires . "' where payment_cards_id = '" . $payment_cards_id . "'");
+
+			//update the order so it won't get pulled again.
+			tep_db_query("update orders set renewal_transaction_date = null where orders_id = '" . $orders_id . "'");
+
+			$number_of_renewal_charged++;
+		}
+
+
+
+
+	}
+	return $number_of_renewal_charged;
+}
+
+
+function create_renewal_paper_invoices_file() {
+
+	// Go through only pending orders, which haven't been sent yet and are in progress
+	$renewal_invoices_info_query = tep_db_query("select *
+												from renewals_invoices ri,
+													 orders o,
+													 orders_products op,
+												     renewals_billing_series rbs,
+ 													 skus s,
+ 													 products p,
+												     skinsites ss
+												where ss.skinsites_id = o.skinsites_id
+											  	and ri.orders_id=o.orders_id
+												and o.orders_id = op.orders_id
+												and op.skus_id = s.skus_id
+												and op.products_id = p.products_id
+												and o.renewals_billing_series_id = rbs.renewals_billing_series_id
+ 												and rbs.renewals_billing_series_id = ri.renewals_billing_series_id
+        										and rbs.effort_number = ri.effort_number
+												and ri.was_sent=0
+                  								and ri.in_progress=1
+												and to_days(ri.date_to_be_sent) <= to_days(curdate())
+ 												and rbs.renewals_invoices_type = 'PAPER'");
+
+	// Set our number of processed paper invoices to its default value of zero.
+	$number_of_renewal_paper_invoices_file_records = 0;
+
+	// Loop through our paper invoices and write them to our database table.
+	while ($renewal_invoices_info = tep_db_fetch_array($renewal_invoices_info_query)) {
+		// Pull data form our current renewal invoice.
+		$billing_first_name = $renewal_invoices_info['billing_first_name'];
+		$billing_last_name = $renewal_invoices_info['billing_last_name'];
+		$billing_address_line_1 = $renewal_invoices_info['billing_street_address'];
+		$billing_city = $renewal_invoices_info['billing_city'];
+		$billing_state = $renewal_invoices_info['billing_state'];
+		$billing_postal_code = $renewal_invoices_info['billing_postcode'];
+		$delivery_first_name = $renewal_invoices_info['delivery_first_name'];
+		$delivery_last_name = $renewal_invoices_info['delivery_last_name'];
+		$delivery_address_line_1 = $renewal_invoices_info['delivery_street_address'];
+		$delivery_city = $renewal_invoices_info['delivery_city'];
+		$delivery_state = $renewal_invoices_info['delivery_state'];
+		$delivery_postal_code = $renewal_invoices_info['delivery_postcode'];
+		$renewals_invoices_id = $renewal_invoices_info['renewals_invoices_id'];
+		$customers_id = $renewal_invoices_info['customers_id'];
+		$orders_id = $renewal_invoices_info['orders_id'];
+		$renewals_billing_series_code = $renewal_invoices_info['renewals_billing_series_code'];
+		$products_id = $renewal_invoices_info['products_id'];
+		$skus_type_order =$renewal_invoices_info['skus_type_order'];
+		$prior_orders_id = $renewal_invoices_info['prior_orders_id'];
+		$renewal_order_status = $renewal_invoices_info['orders_status'];
+		$skus_status = $renewal_invoices_info['skus_status'];
+		$products_name = $renewal_invoices_info['products_name'];
+		$skus_term = $renewal_invoices_info['skus_term'];
+		$effort_number = $renewal_invoices_info['effort_number'];
+		$date_purchased = $renewal_invoices_info['date_purchased'];
+		$amount_owed = $renewal_invoices_info['amount_owed'];
+		$amount_paid = $renewal_invoices_info['amount_paid'];
+		$price = $renewal_invoices_info['products_price'];
+		$email_address = $renewal_invoices_info['customers_email_address'];
+		$continuous_service = $renewal_invoices_info['continuous_service'];
+		$auto_renew = $renewal_invoices_info['auto_renew'];
+		$cc_number_display = $renewal_invoices_info['cc_number_display'];
+		$template_directory = $renewal_invoices_info['tplDir'];
+		$skinsites_id = $renewal_invoices_info['skinsites_id'];
+
+		// Check to make sure we can still process this paper invoice.
+		// If not print why and stop processing renewal invoice.
+		$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
+		if ($check_renewal_order_result !== true) {
+			//set the in_progress to 0. Used for clean up later.
+			$comments = "This paper effort was not created because " . $check_renewal_order_result;
+			tep_db_query("update renewals_invoices set in_progress = 0, comments = '" . $comments . "' where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+			continue;
+		}
+
+		// Insert a new row into our paper invoices file
+		tep_db_query("insert into paper_invoices (customers_id, billing_first_name, billing_last_name, billing_address_line_1, billing_address_line_2, billing_city, billing_state,
+					billing_postal_code, delivery_first_name, delivery_last_name, delivery_address_line_1, delivery_address_line_2, delivery_city, delivery_state,
+					delivery_postal_code, product_name, price, term, effort_number, orders_id, date_purchased, amount_owed, amount_paid, email_address,
+					renewals_billing_series_code, cc_number_display, template_directory, site_id, created_date, modified_date, active)
+					values ('" . $customers_id . "', '" . tep_db_input($billing_first_name) . "', '" . tep_db_input($billing_last_name) . "', '" . tep_db_input($billing_address_line_1) . "', '', '" . tep_db_input($billing_city) . "', '" . $billing_state . "',
+					'" . tep_db_input($billing_postal_code) . "', '" . tep_db_input($delivery_first_name) . "', '" . tep_db_input($delivery_last_name) . "', '" . tep_db_input($delivery_address_line_1) . "', '', '" . tep_db_input($delivery_city) . "', '" . $delivery_state . "',
+					'" . tep_db_input($delivery_postal_code) . "', '" . tep_db_input($products_name) . "', '" . $price . "', '" . $skus_term . "', '" . $effort_number . "', '" . $orders_id . "', '" . $date_purchased . "',
+					'" . $amount_owed . "', '" . $amount_paid . "', '" . $email_address . "', '" . tep_db_input($renewals_billing_series_code) . "', '" . tep_db_input($cc_number_display) . "', '" . tep_db_input($template_directory) . "', '" . $skinsites_id . "', now(), now(), 1)");
+
+		// Increment our number of papaer invoices by one.
+		$number_of_renewal_paper_invoices_file_records++;
+
+		// Update the was_sent flag.
+		tep_db_query("update renewals_invoices
+					  set was_sent=1, date_sent=now()
+					  where renewals_invoices_id='" . $renewals_invoices_id . "'");
+
+		// Update the order's invoices_sent flag.
+		tep_db_query("update orders set renewal_invoices_sent=1 where orders_id='" . $orders_id . "'");
+	}
+
+	// Return the number of paper invoices processed.
+	return $number_of_renewal_paper_invoices_file_records;
+
+}
+
+function create_additional_renewal_invoices() {
+	//go through only pending orders, which haven't been sent yet and are in progress
+	$renewals_billing_series_array = unserialize(RENEWALS_BILLING_SERIES);
+	$number_of_renewal_invoices_created = 0;
+
+	//rearrange the billing series array so we can pick the next effort
+	for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
+		$renewels_billing_series[$renewals_billing_series_array[$i]['renewals_billing_series_id']][$renewals_billing_series_array[$i]['effort_number']] = $renewals_billing_series_array[$i];
+	}
+
+	//only select invoices that have been sent and are still in_progress.
+	$renewal_invoices_info_query = tep_db_query("
+		select *
+		from renewals_invoices ri,
+			orders o,
+			orders_products op,
+			renewals_billing_series rbs,
+			skus s,
+			products p
+		where ri.orders_id=o.orders_id
+			and o.orders_id = op.orders_id
+			and op.skus_id = s.skus_id
+			and op.products_id = p.products_id
+			and o.renewals_billing_series_id = rbs.renewals_billing_series_id
+			and rbs.renewals_billing_series_id = ri.renewals_billing_series_id
+			and rbs.effort_number = ri.effort_number
+			and ri.was_sent=1
+			and ri.in_progress=1
+	");
+
+	while ($renewal_invoices_info = tep_db_fetch_array($renewal_invoices_info_query)) {
+		$renewals_invoices_id = $renewal_invoices_info['renewals_invoices_id'];
+		$customers_id = $renewal_invoices_info['customers_id'];
+		$orders_id = $renewal_invoices_info['orders_id'];
+		$renewals_billing_series_id = $renewal_invoices_info['renewals_billing_series_id'];
+		$renewals_billing_series_effort_number = $renewal_invoices_info['effort_number'];
+		$products_id = $renewal_invoices_info['products_id'];
+		$skus_type_order =$renewal_invoices_info['skus_type_order'];
+		$prior_orders_id = $renewal_invoices_info['prior_orders_id'];
+		$renewal_order_status = $renewal_invoices_info['orders_status'];
+		$skus_status = $renewal_invoices_info['skus_status'];
+		$date_sent = $renewal_invoices_info['date_sent'];
+		$continuous_service = $renewal_invoices_info['continuous_service'];
+		$auto_renew = $renewal_invoices_info['auto_renew'];
+
+		$create_next_effort = true;
+
+		$next_effort_number = $renewals_billing_series_effort_number+1;
+
+		//check to see if the order is still valid for invoice creation, if not then update the invoice
+		//and move on to next order.
+		$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
+		if ($check_renewal_order_result !== true) {
+			$comment = "Next effort for this invoice was not created because " . $check_renewal_order_result;
+			tep_db_query("update renewals_invoices set in_progress = 0, comments='" . tep_db_input($comment) . "' where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+			continue;
+		}
+
+		//check to see if there is a next effort for this series.
+		if (!isset($renewels_billing_series[$renewals_billing_series_id][$next_effort_number])) {
+			$create_next_effort = false;
+			$comment = "Next effort for this invoice was not created because there are no more efforts for this billing series.";
+		} else {
+			$next_effort_delay = $renewels_billing_series[$renewals_billing_series_id][$next_effort_number]['delay_in_days'];
+			$comment = "Next effort for this invoice was created.";
+		}
+
+		if ($create_next_effort) {
+			//this is where we create the next one.
+			//Let's check to make sure the user hasn't already been entered for the same order
+			//if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
+			// it will allow us to continue. Which is what we want here. We add the delay here.
+			$create_renewal_invoice_query_string = "insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
+                      values (DATE_ADD(curdate(),INTERVAL " . $next_effort_delay . " DAY), '" . $orders_id . "', '" . $customers_id . "', '" . $renewals_billing_series_id . "', $next_effort_number, '1')";
+
+			$result = tep_db_query_return_error($create_renewal_invoice_query_string);
+
+			//if there was an error let's record that.
+			if (tep_db_query_returned_error()) {
+				log_renewal_process("Warning: create_additional_renewal_invoice tried to insert the same user,same order, same effort (" . $create_renewal_invoice_query_string . ")", $orders_id);
+			}
+			$number_of_renewal_invoices_created++;
+
+		}
+
+		//set this invoice' in_progress to 0. Used for clean up later.
+		if ($create_next_effort) {
+			tep_db_query("update renewals_invoices set in_progress = 0, comments='" . tep_db_input($comment) . "' where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+		} else {
+			//don't set the in_progress to 0 since it is the last effort. We'll clean this one up during
+			//mass cancel,since it is allowed to be active for cancel delay days.
+			tep_db_query("update renewals_invoices set comments='" . tep_db_input($comment) . "' where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+
+		}
+	}
+
+	return $number_of_renewal_invoices_created;
+}
+
+//mass cancel renewal orders. We look at the cancel_delay on the billing series
+//which we will add to the time the last invoice was sent and if the time
+//has expired we simply cancel the order (if it was still Pending).
+//we also need to cancel any still Pending orders that have moved to history.
+function mass_cancel_renewal_orders() {
+	$number_of_mass_cancelled_orders = 0;
+	$renewal_active_invoices_info_query = tep_db_query("select ri.*, o.*, rbs.*
+												from renewals_invoices ri,
+													 orders o,
+												     renewals_billing_series rbs
+												where ri.orders_id=o.orders_id
+												and o.renewals_billing_series_id = rbs.renewals_billing_series_id
+ 												and rbs.renewals_billing_series_id = ri.renewals_billing_series_id
+        										and rbs.effort_number = ri.effort_number
+												and o.orders_status = 1
+												and ri.in_progress = 1
+												and rbs.cancel_delay is not null
+												and to_days(now()) > to_days(DATE_ADD(ri.date_sent,INTERVAL rbs.cancel_delay DAY))");
+
+	//now find any invoices in history table for PENDING orders that have no active renewal invoices for
+	//the order's current renewals_billing_series.
+	//these renewal orders need to be cancelled.
+	$renewal_history_invoices_info_query = tep_db_query("
+		select
+			rih.*, o.*
+		from
+			renewals_invoices_history rih,
+			orders o left join renewals_invoices ri on (ri.orders_id = o.orders_id),
+			renewals_billing_series rbs
+		where
+			ri.orders_id is null
+			and rih.orders_id = o.orders_id
+			and o.renewals_billing_series_id = rbs.renewals_billing_series_id
+			and rbs.renewals_billing_series_id = rih.renewals_billing_series_id
+			and o.orders_status = 1
+	");
+	//lets get the results and merge them
+	$renewal_active_invoices_info = array();
+	$renewal_history_invoices_info = array();
+	$renewal_invoices_info_array = array();
+
+	while ($renewal_active_invoices_info_array = tep_db_fetch_array($renewal_active_invoices_info_query)) {
+		$renewal_active_invoices_info[] = $renewal_active_invoices_info_array;
+	}
+
+	while ($renewal_history_invoices_info_array = tep_db_fetch_array($renewal_history_invoices_info_query)) {
+		$renewal_history_invoices_info[] = $renewal_history_invoices_info_array;
+	}
+
+	if (sizeof($renewal_active_invoices_info) > 0) {
+		$renewal_invoices_info_array = array_merge($renewal_invoices_info_array, $renewal_active_invoices_info);
+	}
+	if (sizeof($renewal_history_invoices_info) > 0) {
+		$renewal_invoices_info_array = array_merge($renewal_invoices_info_array, $renewal_history_invoices_info);
+	}
+	for ($i=0,$n=sizeof($renewal_invoices_info_array); $i<$n; $i++) {
+		$renewal_invoices_info = $renewal_invoices_info_array[$i];
+
+		$orders_id = $renewal_invoices_info['orders_id'];
+		$orders_status_id = $renewal_invoices_info['orders_status'];
+		$cancel_status_id = DEFAULT_CANCEL_ORDER_STATUS_ID;
+		$customer_notified = 0;
+		$cancel_delay = (isset($renewal_invoices_info['cancel_delay'])) ? $renewal_invoices_info['cancel_delay'] : '';
+		$renewals_invoices_id = $renewal_invoices_info['renewals_invoices_id'];
+		$last_effort_sent = $renewal_invoices_info['date_sent'];
+
+		//if cancel_delay isn't set, there aren't any active invoices left (it wasn't included in the  $renewal_history_invoices_info_query)
+		if ($cancel_delay == '') {
+			$comments = 'Cancelled by Renewal Process. Last effort was sent on ' . $last_effort_sent . ', no active invoices left and order is still pending.';
+		} else {
+			$comments = 'Cancelled by Renewal Process. Last effort was sent on ' . $last_effort_sent . ', no payment has been made for ' .$cancel_delay. ' days, which is this billing series cancel delay.';
+		}
+
+		//update the order status
+		tep_db_query("update orders set orders_status = '" . DEFAULT_CANCEL_ORDER_STATUS_ID . "' where orders_id = '" . (int)$orders_id . "'");
+		//add to orders status history
+		tep_db_query("insert into " . TABLE_ORDERS_STATUS_HISTORY . " (orders_id, orders_status_id, date_added, customer_notified, comments) values ('" . (int)$orders_id . "', '" . tep_db_input($cancel_status_id) . "', now(), '" . tep_db_input($customer_notified) . "', '" . tep_db_input($comments)  . "')");
+		//set the in_progress to 0 for clean up.
+		tep_db_query("update renewals_invoices set in_progress=0 where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+
+		//create the batch for the cancel. need to enter the order's previous status, since if it is a pending order, then it will do an ignore fulfillment
+		create_fulfillment_batch_item(tep_db_input($orders_id), FULFILLMENT_CANCEL_ID, $orders_status_id);
+
+		$number_of_mass_cancelled_orders++;
+	}
+
+
+	return $number_of_mass_cancelled_orders;
+}
+
+//move any renewal invoice where in progress is 0 or was sent.
+function clean_up_renewal_invoices() {
+	$number_of_renewal_invoices_cleaned_up = 0;
+	//LOOP THROUHG ALL INVOICES WHERE IN_PROGRESS IS 0.
+	$renewal_invoices_info_query = tep_db_query("select *
+												from renewals_invoices ri
+												where ri.in_progress=0");
+	while ($renewal_invoices_info = tep_db_fetch_array($renewal_invoices_info_query)) {
+		$renewals_invoices_id = $renewal_invoices_info['renewals_invoices_id'];
+
+		//move the invoice to history.
+		//we use replace. If the server goes down right between these 2 stmts then the next time
+		//it will still work.
+		tep_db_query("replace into renewals_invoices_history select * from renewals_invoices where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+		//remove old one
+		tep_db_query("delete from renewals_invoices where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+		$number_of_renewal_invoices_cleaned_up++;
+	}
+	return $number_of_renewal_invoices_cleaned_up;
+}
+
+//This function will set the billing series in motion.
+function create_first_effort_renewal_invoices() {
+	$renewals_billing_series_array = unserialize(RENEWALS_BILLING_SERIES);
+	$number_of_renewal_invoices_created = 0;
+
+	//loop through each billing series and create a renewal invoice for any orders that needs it.
+	//add in the delay for each effort
+	foreach ($renewals_billing_series_array as $renewals_billing_series) {
+		$renewals_billing_series_id = $renewals_billing_series['renewals_billing_series_id'];
+		$renewals_billing_series_delay = $renewals_billing_series['delay_in_days'];
+		$renewals_billing_series_effort_number=$renewals_billing_series['effort_number'];
+
+		//this is only the first effort so move on to the next if this is effort 2 and above.
+		if ( $renewals_billing_series_effort_number > 1 ) {
+			continue;
+		}
+		//only grab the last 30 days worth. No need to get all orders ever.
+		$renewal_orders_query_string = "
+			select
+				o.*, op.*, s.*, p.continuous_service, p.products_status
+			from
+				orders o,
+				orders_products op,
+				products p,
+				skus s
+			where
+				o.orders_id = op.orders_id
+				and op.products_id = p.products_id
+				and op.skus_id = s.skus_id
+				and o.renewal_invoices_created = 0
+				and o.renewal_invoices_sent = 0
+				and o.orders_status = 1
+				and o.is_renewal_order = 1
+				and o.renewals_billing_series_id = " . $renewals_billing_series_id . "
+				and to_days(o.date_purchased) > to_days(DATE_SUB(curdate(),INTERVAL 60 DAY))
+				and to_days(o.date_purchased) <= to_days(DATE_SUB(curdate(),INTERVAL " . $renewals_billing_series_delay . " DAY))
+		";
+		$renewal_orders_query = tep_db_query($renewal_orders_query_string);
+
+		//we will create an invoice for any valid renewal orders (including ones that have
+		//continuous service = 0 or auto_renew = 0, this will be caught in the email sending.
+		//that way it will not be pulled again for invoicing since the
+		//renwal_invoices_created will be 1.
+		//we will then check before sending it if the order is still valid.
+		while ($renewal_order = tep_db_fetch_array($renewal_orders_query)) {
+			$renewal_orders_id = $renewal_order['orders_id'];
+			$renewal_orders_customers_id = $renewal_order['customers_id'];
+			$products_status = $renewal_order['products_status'];
+			$skus_status = $renewal_order['skus_status'];
+			$continuous_service = $renewal_order['continuous_service'];
+			$products_id = $renewal_order['products_id'];
+			$skus_type_order =$renewal_order['skus_type_order'];
+			$prior_orders_id = $renewal_order['prior_orders_id'];
+			$auto_renew = $renewal_order['auto_renew'];
+
+
+			//Let's check to make sure the user hasn't already been entered for the same order
+			//if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
+			// it will allow us to continue. Which is what we want here.
+			$create_renewal_invoice_query_string = "insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
+                          values (now(), '" . $renewal_orders_id . "', '" . $renewal_orders_customers_id . "', '" . $renewals_billing_series_id . "', '1', '1')";
+
+			$result = tep_db_query_return_error($create_renewal_invoice_query_string);
+
+			//if there was an error let's record that.
+			if (tep_db_query_returned_error()) {
+				log_renewal_process("Warning: create_renewal_invoice tried to insert the same user,same order, same effort (" . $create_renewal_invoice_query_string . ")", $orders_id);
+			}
+			//if there was an error or not, we need to update the order so it won't get pulled again.
+			tep_db_query("update orders set renewal_invoices_created = 1 where orders_id = '" . $renewal_orders_id . "'");
+			$number_of_renewal_invoices_created++;
+
+		}
+	}
+
+	return $number_of_renewal_invoices_created;
+
+}
+
+function send_renewal_email_invoices() {
+	global $currency;
+
+	$currency = (USE_DEFAULT_LANGUAGE_CURRENCY == 'true') ? LANGUAGE_CURRENCY : DEFAULT_CURRENCY;
+	$currencies = new currencies();
+	//go through only pending orders, which haven't been sent yet and are in progress
+	$renewal_invoices_info_query = tep_db_query("select *
+												from renewals_invoices ri,
+													 orders o,
+													 orders_products op,
+												     renewals_billing_series rbs,
+ 													 skus s,
+                                                     products p,
+        											 products_description pd
+												where ri.orders_id=o.orders_id
+												and o.orders_id = op.orders_id
+												and op.skus_id = s.skus_id
+												and op.products_id = p.products_id
+												and p.products_id = pd.products_id
+												and pd.language_id = 1
+												and o.renewals_billing_series_id = rbs.renewals_billing_series_id
+ 												and rbs.renewals_billing_series_id = ri.renewals_billing_series_id
+        										and rbs.effort_number = ri.effort_number
+												and ri.was_sent=0
+                  								and ri.in_progress=1
+												and to_days(ri.date_to_be_sent) <= to_days(curdate())
+ 												and rbs.renewals_invoices_type = 'EMAIL'");
+
+	$number_of_email_renewal_invoices_sent = 0;
+	$renewals_email_name = '';
+	$renewals_invoices_email_name = '';
+	while ($renewal_invoices_info = tep_db_fetch_array($renewal_invoices_info_query)) {
+		$renewals_invoices_id = $renewal_invoices_info['renewals_invoices_id'];
+		$renewals_invoices_email_name = $renewal_invoices_info['renewals_invoices_email_name'];
+		$customers_id = $renewal_invoices_info['customers_id'];
+		$orders_id = $renewal_invoices_info['orders_id'];
+		$renewals_billing_series_id = $renewal_invoices_info['renewals_billing_series_id'];
+		$accepted_for_delivery = FALSE;
+		$products_id = $renewal_invoices_info['products_id'];
+		$skus_id = $renewal_invoices_info['skus_id'];
+		$skus_type_order =$renewal_invoices_info['skus_type_order'];
+		$prior_orders_id = $renewal_invoices_info['prior_orders_id'];
+		$renewal_order_status = $renewal_invoices_info['orders_status'];
+		$skus_status = $renewal_invoices_info['skus_status'];
+		$continuous_service = $renewal_invoices_info['continuous_service'];
+		$auto_renew = $renewal_invoices_info['auto_renew'];
+		$is_gift = $renewal_invoices_info['is_gift'];
+		$skinsites_id = $renewal_invoices_info['skinsites_id'];
+		$is_postcard_confirmation = $renewal_invoices_info['is_postcard_confirmation'];
+
+		// check to see if order is a postcard confirmation. If it is, mark the invoice as sent and move to next order (no e-mail).
+		if ($is_postcard_confirmation == '1') {
+			$number_of_email_renewal_invoices_sent++;
+			//update the was_sent flag.
+			tep_db_query("update renewals_invoices
+						  set was_sent=1, date_sent=now()
+						  where renewals_invoices_id='" . $renewals_invoices_id . "'");
+
+			//update the order's invoices_sent flag. so it will be pulled for charging.
+			tep_db_query("update orders set renewal_invoices_sent=1 where orders_id='" . $orders_id . "'");
+			continue;
+		}
+
+		if ($is_gift == '1') {
+			$is_gift = true;
+		} else {
+			$is_gift = false;
+		}
+		//check to see if the order is still valid for invoice sending
+		$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
+		if ($check_renewal_order_result !== true) {
+			$comments = "This email effort was not sent because " . $check_renewal_order_result;
+			tep_db_query("update renewals_invoices set in_progress = 0, comments = '" . $comments . "' where renewals_invoices_id = '" . $renewals_invoices_id . "'");
+			continue;
+		}
+
+		if ($renewals_invoices_email_name == '') {
+			log_renewal_process("ERROR: Renewal email name is not set for billing series id: " . $renewals_billing_series_id);
+		} else {
+			//first the include doesn't have a return stmt so it will set $found_include_file to 1 if
+			//the inlude worked. The included file will set $accepted_for_delivery if the email was sent.
+			$tplDir = get_template_dir($skinsites_id);
+
+			$found_include_file = include($tplDir . '/' . $renewals_invoices_email_name);
+
+			if ($accepted_for_delivery) {
+				$number_of_email_renewal_invoices_sent++;
+				//update the was_sent flag.
+				tep_db_query("update renewals_invoices
+    						  set was_sent=1, date_sent=now()
+    						  where renewals_invoices_id='" . $renewals_invoices_id . "'");
+
+				//update the order's invoices_sent flag. so it will be pulled for charging.
+				tep_db_query("update orders set renewal_invoices_sent=1 where orders_id='" . $orders_id . "'");
+			} else {
+				//if the include wasn't found see why. If the mail wasn't sent we will try again tomorrow, since the
+				//was_sent flag wasn't updated.
+				if ($found_include_file != 1) {
+					log_renewal_process("ERROR: Unable to find renewal email: " . $renewals_invoices_email_name);
+				}
+			}
+		}
+	}
+	return $number_of_email_renewal_invoices_sent;
+}
+
+function check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $renewal_order_auto_renew, $renewal_order_status) {
+	$check_renewal_order_result = true;
+	//If a renewal order is placed, at the time of the sending of email or charging the card,
+	//or getting check, the product and sku could be changed to
+	//inactive. If the product is inactive and there are no renewal sku active at all for that
+	//product then don't send email and don't renew.
+	// if the product is inactive and the skus_id (on orders_products.skus_id on the renewal order
+	// pulled here) is inactive (Matt has changed the price/remit)
+	// then we need to do a quick check to see if there is at least another active for that
+	// product for the same skus_type_order. Fulfillment will take care of the rest.
+	if ($skus_status == 0) {
+		$skus_status_check_query = tep_db_query("select * from skus where products_id = '" . $products_id . "' and skus_type = 'RENEW' and skus_type_order = '" . $skus_type_order . "' and skus_status = '1'");
+		if (tep_db_num_rows($skus_status_check_query) == 0) {
+			//no active renewal skus so don't create an invoice will be removed later.
+
+			//$update_sql2 = "update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: existing renewal sku is inactive for this order.' where orders_id=$prior_orders_id";
+			//tep_db_query($update_sql2);
+
+			$check_renewal_order_result = "No active renewal sku (type order " . $skus_type_order . ") for products_id " . $products_id;
+		}
+	}
+	//make sure this renewal order product's continuous service is still active and this renewal orders
+	//auto renew hasn't been changed.
+	if ($continuous_service != 1) {
+		$check_renewal_order_result = "Continuous Service for products_id " . $products_id . " is not 1.";
+	}
+	if ($renewal_order_auto_renew != 1) {
+		$check_renewal_order_result = "Auto Renew for this order is not 1.";
+	}
+	if ($renewal_order_status != 1) {
+		$check_renewal_order_result = "This orders status is " . $renewal_order_status . ". Only Pending orders are valid.";
+	}
+
+	// Also make sure we check that the original order wasn't cancelled yet or auto_renew has been reset to 0.
+	if ($prior_orders_id != '') {
+		$check_prior_order_query = tep_db_query("select * from orders where orders_id = '" . $prior_orders_id . "'");
+
+		$check_prior_order = tep_db_fetch_array($check_prior_order_query);
+
+		$prior_order_status = $check_prior_order['orders_status'];
+		$prior_order_auto_renew = $check_prior_order['auto_renew'];
+
+		//if the original order isn't a Paid order (cancelled or disputed) go on to the next order.
+		//if the original order's auto-renew (user action) was changed move on the next order.
+		if ($prior_order_status != 2) {
+			$check_renewal_order_result = "The original order (orders_id: " .$prior_orders_id . ") is no longer Paid.";
+		}
+		if ($prior_order_auto_renew == 0) {
+			$check_renewal_order_result = "The auto renew for the original order (orders_id: " .$prior_orders_id . ") is not 1.";
+		}
+	}
+	return $check_renewal_order_result;
+}
+
+function tep_mail($to_name, $to_email_address, $email_subject, $email_text, $from_email_name, $from_email_address, $file_location='', $file_name='',$bcc = false ) {
+	if (SEND_EMAILS != 'true') return false;
+
+	if($bcc==true){
+		$bcc_email_address = BCC_EMAIL_ADDRESS;
+		$message = new email(array('X-Mailer: osCommerce', 'Reply-To: ' . $from_email_address, 'Bcc: ' . $bcc_email_address));
+	}
+	else{
+		$message = new email(array('X-Mailer: osCommerce', 'Reply-To: ' . $from_email_address));
+	}
+
+	// Build the text version
+	$text = strip_tags($email_text);
+	if (EMAIL_USE_HTML == 'true') {
+		$message->add_html($email_text, $text);
+	} else {
+		$message->add_text($text);
+	}
+
+	if ($file_location != '') {
+		$message->add_attachment($message->get_file($file_location), $file_name);
+	}
+	// Send message
+	$message->build_message();
+	return $message->send($to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject);
+
+}
+
+function set_all_defines() {
+	//countries table, for each country name give us the country code.
+	$countries_query = tep_db_query("select * from countries");
+
+	while ($countries_array = tep_db_fetch_array($countries_query)) {
+		$all_countries_array[$countries_array['countries_name']] = $countries_array['countries_iso_code_3'];
+	}
+	define('COUNTRIES', serialize($all_countries_array));
+
+	//state names are used in order, for paper invoices we need to look up abbreviation for these state names
+	$zones_query = tep_db_query("select * from zones");
+
+	while ($zones_array = tep_db_fetch_array($zones_query)) {
+		$all_zones_array[$zones_array['zone_name']] = $zones_array['zone_code'];
+	}
+	define('ZONES', serialize($all_zones_array));
+
+	//currencies
+	$currencies = array();
+	$currencies_query = tep_db_query("select code, title, symbol_left, symbol_right, decimal_point, thousands_point, decimal_places, value from currencies");
+	while ($all_currencies = tep_db_fetch_array($currencies_query)) {
+		$currencies[$all_currencies['code']] = array('title' => $all_currencies['title'],
+			'symbol_left' => $all_currencies['symbol_left'],
+			'symbol_right' => $all_currencies['symbol_right'],
+			'decimal_point' => $all_currencies['decimal_point'],
+			'thousands_point' => $all_currencies['thousands_point'],
+			'decimal_places' => $all_currencies['decimal_places'],
+			'value' => $all_currencies['value']);
+	}
+	define('CURRENCIES', serialize($currencies));
+
+	//configuration table
+	$configuration_query = tep_db_query("select * from configuration");
+	while ($configuration_array = tep_db_fetch_array($configuration_query)) {
+		define($configuration_array['configuration_key'], $configuration_array['configuration_value']);
+	}
+
+	//get the right columns for all required tables, then set the data in the $renewal_order array
+	$orders_columns_query = tep_db_query("show columns from orders");
+	$orders_columns = array();
+	while ($orders_columns_array = tep_db_fetch_array($orders_columns_query)) {
+		$orders_columns[] = $orders_columns_array['Field'];
+	}
+	define('ORDERS_COLUMNS', serialize($orders_columns));
+	$orders_products_columns_query = tep_db_query("show columns from orders_products");
+	$orders_products_columns = array();
+	while ($orders_products_columns_array = tep_db_fetch_array($orders_products_columns_query)) {
+		$orders_products_columns[] = $orders_products_columns_array['Field'];
+	}
+	define('ORDERS_PRODUCTS_COLUMNS', serialize($orders_products_columns));
+
+	//renewal billing series info.
+	$renewels_billing_series_query = tep_db_query("
+		select
+			renewals_billing_series_id,
+			effort_number,
+			delay_in_days,
+			renewals_billing_series_name,
+			renewals_invoices_type,
+			renewals_invoices_email_name
+		from
+			renewals_billing_series
+	");
+	$renewels_billing_series_array = array();
+	while ($renewels_billing_series = tep_db_fetch_array($renewels_billing_series_query)) {
+		//$renewels_billing_series[$renewels_billing_series_array['renewals_billing_series_id']] = array($renewels_billing_series_array['effort_number'] => $renewels_billing_series_array);
+		$renewels_billing_series_array[] = $renewels_billing_series;
+	}
+	define('RENEWALS_BILLING_SERIES', serialize($renewels_billing_series_array));
+
+	//skinsite info
+	$skinsites_query = tep_db_query("select * from skinsites");
+	$skinsites = array();
+	while ($skinsites_array = tep_db_fetch_array($skinsites_query)) {
+		$skinsites[$skinsites_array['skinsites_id']] = $skinsites_array;
+	}
+	define('SKINSITES', serialize($skinsites));
+
+	//setup the skinsite configurations
+	$skinsites_configuration_defines = array();
+	$skinsites_configuration_defines_query = tep_db_query("select cs.skinsites_id, c.configuration_key as cfgKey, c.configuration_value as cfgValue, cs.skinsites_configuration_value from configuration c, configuration_skinsites cs where cs.configuration_id = c.configuration_id");
+	while ($skinsites_configuration_defines_array = tep_db_fetch_array($skinsites_configuration_defines_query)) {
+		$skinsites_configuration_defines[$skinsites_configuration_defines_array['skinsites_id']][$skinsites_configuration_defines_array['cfgKey']] = $skinsites_configuration_defines_array['skinsites_configuration_value'];
+	}
+	define('SKINSITES_CONFIGURATION', serialize($skinsites_configuration_defines));
+}
+
+function init_renewal_orders() {
+
+	//there was a problem with products_quantity being in both orders_products and products,
+	//with 2 different meanings. So we just pick what we need from product and get the rest
+
+	//select all orders that have a continuous_service, with no renewal invoices created,
+	// user want to renew (auto_renew), paid orders and renewal notice < today.
+	$create_renewal_orders_query_string = "
+		SELECT
+			o.`renewal_payment_cards_id`,
+			pc.cc_type AS renewal_cc_type,
+			pc.cc_number AS renewal_cc_number,
+			pc.cc_number_display AS renewal_cc_number_display,
+			pc.cc_expires AS renewal_cc_expires,
+			pc.cc_owner AS renewal_cc_owner,
+			o.*, op.*, s.*,
+			p.continuous_service,
+			p.products_status
+		FROM
+			orders o LEFT JOIN payment_cards pc ON (pc.payment_cards_id = o.renewal_payment_cards_id),
+			orders_products op,
+			products p,
+			skus s
+		WHERE
+			o.orders_id = op.orders_id
+			AND op.products_id = p.products_id
+			AND op.skus_id = s.skus_id
+			AND p.continuous_service = 1
+			AND o.auto_renew = 1
+			AND o.renewal_error != 1
+			AND o.orders_status = 2
+			AND o.renewal_date is not null
+			AND to_days(o.renewal_date) > to_days(DATE_SUB(curdate(),INTERVAL 60 DAY))
+			AND to_days(o.renewal_date) <= to_days(curdate())
+	";
+
+	$create_renewal_orders_query = tep_db_query($create_renewal_orders_query_string);
+	$number_of_renew_invoices_prepared = 0;
+	if (DEBUG == 'true') print "number of orders to be examined: " .  tep_db_num_rows($create_renewal_orders_query) . "\n";
+
+	//Loop through orders that can be renewed.
+	while ($orders_array = tep_db_fetch_array($create_renewal_orders_query)) {
+		$original_order_products_id = $orders_array['products_id'];
+		$original_order_skus_id = $orders_array['skus_id'];
+		$original_order_skus_type = $orders_array['skus_type'];
+		$original_order_skus_type_order = $orders_array['skus_type_order'];
+		$original_order_skus_type_order_period = $orders_array['skus_type_order_period'];
+		$original_order_id = $orders_array['orders_id'];
+		$original_products_status = $orders_array['products_status'];
+		// Is it a postcard confirmation?
+		$original_is_postcard_confirmation = $orders_array['is_postcard_confirmation'];
+
+		//if the original sku was an intro sku then use the 1st RENEW sku type_order_period for the same
+		//skus_type_order
+
+		if ($original_order_skus_type == 'INTRO') {
+			$renewal_skus_type_order_period = '1';
+		} else {
+			//add 1 to the renewal skus type order year to get the next renewal sku in line for the same
+			//skus_type_order.
+			$renewal_skus_type_order_period = $original_order_skus_type_order_period + 1;
+		}
+		if (DEBUG == 'true') print "order number: " .  $original_order_id . " renewal_skus_type_order_period: " .  $renewal_skus_type_order_period . "\n";
+
+		//check to make sure that the renewal skus is available and if it is is active.
+		//if the sku isn't available and the original sku was an INTRO sku no renewals are possible.
+		//if the original sku was a 'RENEW' sku and it isn't available go back to the original renewal sku
+		//and check to see if that one is available, if that isn't available no renewal is possible.
+		//we check for the s.skus_type_order = $original_order_skus_type_order since we might be renewing
+		//a 2 year pub we need to use the 2 year pub renewal skus for that.
+		$potential_renewal_skus_query_string = "
+			select
+				*,
+				if(p.first_issue_delay_days=0,pf.first_issue_delay_days, p.first_issue_delay_days) as first_issue_delay_days
+			from
+				skus s,
+				products p,
+				publication_frequency pf
+			where
+				s.products_id = '" . $original_order_products_id . "'
+				and s.skus_type = 'RENEW'
+				and s.skus_type_order = '" . $original_order_skus_type_order . "'
+				and s.skus_status = 1
+				and s.fulfillment_flag = 1
+				and s.products_id = p.products_id
+				and p.publication_frequency_id = pf.publication_frequency_id
+			order by
+				s.skus_type_order_period desc
+		";
+		$potential_renewal_skus_query = tep_db_query($potential_renewal_skus_query_string);
+
+		if (DEBUG == 'true') print "number of renewal skus for product : " .  $original_order_products_id . ": " . tep_db_num_rows($potential_renewal_skus_query). "\n";
+
+		// START MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH (4/30/2012)
+		if (tep_db_num_rows($potential_renewal_skus_query) == 0) { // No renewal SKUs could be used for this order; record reason why and move on to next order.
+
+			// Were there no renewal SKUs at all?
+			$ANY_potential_renewal_skus_query_string = "select * from skus where products_id = '" . $original_order_products_id . "' and skus_type = 'RENEW'";
+			$ANY_potential_renewal_skus_query = tep_db_query($ANY_potential_renewal_skus_query_string);
+
+			if (tep_db_num_rows($ANY_potential_renewal_skus_query) == 0) {
+				tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: no renewal SKU exists for the PRODUCT in this order.' where orders_id=$original_order_id");
+			}
+			else { // Of the potential renewal SKUs, were there none for this order's SKUS_TYPE_ORDER?
+
+				$potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string = "select * from skus where products_id = '" . $original_order_products_id . "' and skus_type = 'RENEW' and skus_type_order='" . $original_order_skus_type_order . "'";
+				$potential_renewal_skus_for_SKUS_TYPE_ORDER_query = tep_db_query($potential_renewal_skus_for_SKUS_TYPE_ORDER_query_string);
+				if (tep_db_num_rows($potential_renewal_skus_for_SKUS_TYPE_ORDER_query) == 0) {
+					tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: No renewal SKU(s) with the proper SKU TYPE ORDER (" . $original_order_skus_type_order . ") could be found for this order.' where orders_id=$original_order_id");
+				}
+				else { // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
+
+					$potential_ACTIVE_renewal_skus_query_string = "select * from skus where products_id = '" . $original_order_products_id . "' and skus_type = 'RENEW' and skus_type_order='" . $original_order_skus_type_order . "' and skus_status='1'";
+					$potential_ACTIVE_renewal_skus_query = tep_db_query($potential_ACTIVE_renewal_skus_query_string);
+					if (tep_db_num_rows($potential_ACTIVE_renewal_skus_query) == 0) {
+						tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: No ACTIVE renewal SKU(s) could be found for this order.' where orders_id=$original_order_id");
+					}
+					else{
+						tep_db_query("update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: An UNKNOWN error has occured while searching for a renewal SKU for this order; please contact the administrator.' where orders_id=$original_order_id");
+					}
+				}
+			}
+			continue;
+		}
+		// END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH
+
+
+		// Potential Renewal SKUs found: now find the right one
+		$potential_renewal_skus_array = array();
+		$renewal_sku = array();
+		$previous_orders_skus_type_order_period = $original_order_skus_type_order_period - 1;
+		while ($potential_renewal_skus_array = tep_db_fetch_array($potential_renewal_skus_query)) {
+			//since we go descending through the type orders year, we can look first for the renewal type order year,
+			//then the original type order year, and if that doesn't exist, keep going until we find one.
+			//if $renewal_sku isn't populated at the end of this loop, it means we don't have any skus
+			//for renewal.
+
+			//First check for the next renewal Sku.
+			if ($potential_renewal_skus_array['skus_type_order_period'] == $renewal_skus_type_order_period) {
+				$renewal_sku = $potential_renewal_skus_array;
+				break;
+			}
+			//Second check for the original renewal skus type order
+			if ($potential_renewal_skus_array['skus_type_order_period'] == $original_order_skus_type_order_period) {
+				$renewal_sku = $potential_renewal_skus_array;
+				break;
+			}
+			//now if we have already passed the original skus type order then go back to any previous ones.
+			if ($potential_renewal_skus_array['skus_type_order_period'] < $original_order_skus_type_order_period) {
+				//only do this for type_order_period 1 and up.
+				if ($previous_orders_skus_type_order_period > 0) {
+					//check to see if there are any previous type order, if not, move on and see if there are
+					//are any previous to that.
+					if ($potential_renewal_skus_array['skus_type_order_period'] == $previous_orders_skus_type_order_period) {
+						$renewal_sku = $potential_renewal_skus_array;
+						break;
+					} else {
+						$previous_orders_skus_type_order_period--;
+					}
+				}
+			}
+		}
+		if (DEBUG == 'true') print "Trying to find renewal skus  : " .  $renewal_skus_type_order_period . ": ";
+		if (DEBUG == 'true') debug($renewal_sku, 'renewal_sku');
+
+		//at this point we know there isn't any valid renewal sku, so move on to the next order.
+		if (sizeof($renewal_sku) == 0) {
+
+			//restored error_description
+			$update_sql = "update " . TABLE_ORDERS . " set renewal_error='1', renewal_error_description='Error: renewal sku with proper sku type order period (1 to " . $renewal_skus_type_order_period . ") does not exist for this order' where orders_id=$original_order_id";
+			tep_db_query($update_sql);
+
+			if (DEBUG == 'true') print "no renewal sku found\n";
+			continue;
+		}
+
+		//now that we have a valid sku lets put the order in the right track.
+		$is_perfect_renewal = false;
+		if (is_perfect_renewal($orders_array)) {
+			$renewals_billing_series_id = TRACK1;
+			$is_perfect_renewal = true;
+		} else {
+			if ($orders_array['cc_number'] == '' && $orders_array['renewal_cc_number'] == '') {
+				$renewals_billing_series_id = TRACK2_CHECK;
+			} else if($orders_array['is_postcard_confirmation'] == '1'){
+				$renewals_billing_series_id = TRACK2_PC;
+			} else {
+				$renewals_billing_series_id = TRACK2_BAD_CC;
+			}
+		}
+		if (DEBUG == 'true') print "Perfect Renewal: " . $is_perfect_renewal . "; track chosen: " . $renewals_billing_series_id . "\n";
+
+		//create the order and if succeeded, we will update the original order with renewal info and also so it won't be pulled again for renewals.
+		$renewal_orders_id = '';
+		$renewal_orders_id = create_renewal_order($orders_array, $renewals_billing_series_id, $is_perfect_renewal, $renewal_sku, $original_is_postcard_confirmation);
+		if ($renewal_orders_id != '') {
+			// Update our original order setting the renewal_date to null to prevent the order from being picked up again and
+			// a duplicate renewal being created. Also set renewal_orders_id so we can associate the original and renewal orders.
+			tep_db_query("update orders
+						  set renewal_orders_id = '" . $renewal_orders_id . "',
+						  renewal_date = null,
+						  renewal_payment_cards_id = ''
+					      where orders_id = '" . $original_order_id. "'");
+			if (DEBUG == 'true') print "Created renewal order\n";
+		}
+
+		if (DEBUG == 'true') print "\n\n";
+		$number_of_renew_invoices_prepared++;
+	}
+	return $number_of_renew_invoices_prepared;
+}
+
+function is_perfect_renewal($order) {
+	if ($order['cc_number'] == '' || $order['cc_expires'] == '') {
+		if ($order['renewal_cc_number'] == '' || $order['renewal_cc_expires'] == '') {
+			return false;
+		}
+	}
+	return true;
+}
+
+function create_renewal_order($order, $renewals_billing_series_id, $is_perfect_renewal, $renewal_sku, $is_postcard_confirmation) {
+	$renewal_order = array();
+	$renewal_order_product = array();
+
+	//get the columns array for neccessary tables.
+	$orders_columns = unserialize(ORDERS_COLUMNS);
+	$orders_products_columns = unserialize(ORDERS_PRODUCTS_COLUMNS);
+
+
+	//now loop through each and create an array for each table with data from $order.
+	//this allows us to just override the columns we want and have the rest automatically
+	//copied over.
+	for ($i=0, $n=sizeof($orders_columns); $i<$n; $i++) {
+		$column_name = $orders_columns[$i];
+		$renewal_order[$column_name] = $order[$column_name];
+	}
+	for ($i=0, $n=sizeof($orders_products_columns); $i<$n; $i++) {
+		$column_name = $orders_products_columns[$i];
+		$renewal_order_product[$column_name] = $order[$column_name];
+	}
+
+	$renewal_orders_id = '';
+
+	//creates the parent order number.
+	//and set it on the new order.
+	tep_db_query("insert into orders_groups (orders_groups_id) VALUES ('')");
+	$renewal_orders_groups_id = tep_db_insert_id();
+	$renewal_order['orders_groups_id'] = $renewal_orders_groups_id;
+
+	//If renewal cc data exists (renewal_payment_cards_id) on the original order, use it to set the cc fields for the renewal
+	if($renewal_order['renewal_payment_cards_id']){
+		$renewal_order['cc_type'] = $order['renewal_cc_type'];
+		$renewal_order['cc_owner'] = $order['renewal_cc_owner'];
+		$renewal_order['cc_expires'] = $order['renewal_cc_expires'];
+		$renewal_order['cc_number'] = $order['renewal_cc_number'];
+		$renewal_order['cc_number_display'] = $order['renewal_cc_number_display'];
+		$renewal_order['payment_cards_id'] = $order['renewal_payment_cards_id'];
+		$renewal_order['payment_method'] = 'cc';
+	}
+
+	// Account for "partner_paid" orders by setting them to "cc" for the renewal order (MCS 3/2015)
+	if($renewal_order['payment_method'] == 'partner_paid') $renewal_order['payment_method'] = 'cc';
+
+	//get rid of the unwanted fields
+	unset($renewal_order['orders_id']);
+	unset($renewal_order['renewal_payment_cards_id']);
+
+	//THIS IS COMMENTED OUT SINCE IT SHOULD STAY A CC ORDER. IF IT IS A TRACK 2 IT WON'T GET PULLED
+	//FOR CHARGING AND IF CHECK COMES IN, CUSTCARE CAN CHANGE IT THERE TO A CHECK ENTRY.
+	//overwrite fields.
+	//if this isn't a perfect renewal make this an invoice order.
+	//but leave the credit card info in place for next year renewals (especially Master Card)
+	//if (!$is_perfect_renewal) {
+	//    	$renewal_order['payment_method'] = 'check';
+	//     $renewal_order['cc_type'] = '';
+	//     $renewal_order['cc_owner'] = '';
+	//     $renewal_order['cc_number'] = '';
+	//     $renewal_order['cc_expires']   = '';
+	//     $renewal_order['cc_number_display']   = '';
+	//     $renewal_order['payment_cards_id'] = 0;
+	//}
+	$renewal_order['last_modified'] ='null';
+	$renewal_order['date_purchased'] = 'now()';
+	//set to pending.
+	$renewal_order['orders_status'] = DEFAULT_ORDERS_STATUS_ID;
+	$renewal_order['orders_date_finished'] = 'null';
+	$renewal_order['source_id'] = 'null';
+	$renewal_order['source_id_time_entered'] = 'null';
+	$renewal_order['source_id_type'] = 'null';
+	$renewal_order['mystery_gifts_id'] = 'null';
+	$renewal_order['quickshop_used'] = 0;
+	//get the price from the renewal sku.
+	$renewal_order['amount_owed'] = $renewal_sku['skus_price'];
+	$renewal_order['amount_paid'] = 0;
+	$renewal_order['is_buyagain'] = '0';
+	$renewal_order['fulfillment_batch_id'] = 'null';
+	$renewal_order['skus_id_used_for_fulfillment'] = 0;
+	//renewal_date will be filled in when the the order is paid (when adding fulfill batch_item).
+	$renewal_order['renewal_date'] = 'null';
+	$renewal_order['renewal_invoices_created'] = 0;
+	$renewal_order['renewal_invoices_sent'] = 0;
+	//end_delivery_range will be setup when the order is paid(when adding fulfill batch_item).
+	$renewal_order['end_delivery_range'] = '';
+	$renewal_order['renewal_transaction_date'] = 'null';
+	$renewal_order['renewal_orders_id'] = 'null';
+	$renewal_order['prior_orders_id'] = $order['orders_id'];
+	$renewal_order['is_renewal_order'] = 1;
+	$renewal_order['renewals_billing_series_id'] = $renewals_billing_series_id;
+	$renewal_order['is_gift'] = $order['is_gift'];
+	$renewal_order['renewals_credit_card_charge_attempts'] = 0;
+	if($is_postcard_confirmation) $renewal_order['is_postcard_confirmation'] = '1';
+	if($is_postcard_confirmation) $renewal_order['postcard_confirmation_date'] = 'now()';
+
+	//clear our delayed billing data.
+	$renewal_order['is_delayed_billing'] = 0;
+	$renewal_order['is_delayed_billing_paid'] = 0;
+	$renewal_order['delayed_billing_date'] = 'null';
+	$renewal_order['delayed_billing_credit_card_charge_attempts'] = 0;
+
+	// clear renewal error
+	$renewal_order['renewal_error'] = 0;
+	$renewal_order['renewal_error_description'] = '';
+
+
+	//this used to be on the original order now moved here.
+	if ($is_perfect_renewal) {
+		if($is_postcard_confirmation){
+			$renewal_order['renewal_transaction_date'] = 'date_add(now(), INTERVAL ' . RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS . ' DAY)';
+		}else{
+			$renewal_order['renewal_transaction_date'] = 'date_add(now(), INTERVAL ' . DEFAULT_RENEWAL_CHARGE_DAYS . ' DAY)';
+		}
+	}
+
+	tep_db_perform('orders', $renewal_order);
+	$renewal_orders_id = tep_db_insert_id();
+
+	if ($renewal_orders_id) {
+		//orders_product table overwrites.
+		unset($renewal_order_product['orders_products_id']);
+		$renewal_order_product['orders_id'] = $renewal_orders_id;
+		$renewal_order_product['skus_id'] = $renewal_sku['skus_id'];
+		$renewal_order_product['products_price'] = $renewal_sku['skus_price'];
+		$renewal_order_product['final_price'] = $renewal_sku['skus_price'];
+		$renewal_order_product['location'] = 'renewal';
+
+		tep_db_perform('orders_products', $renewal_order_product);
+
+		//order_status_history
+		$renewal_order_status_history = array();
+		$renewal_order_status_history['orders_id'] = $renewal_orders_id;
+		$renewal_order_status_history['orders_status_id'] = DEFAULT_ORDERS_STATUS_ID;
+		$renewal_order_status_history['date_added'] = 'now()';
+		$renewal_order_status_history['comments'] = DEFAULT_PENDING_COMMENT;
+		tep_db_perform('orders_status_history', $renewal_order_status_history);
+
+		//order_total (mimicking what the ot_ classes do.
+		$renewal_order_total = array();
+		$renewal_order_total['orders_id'] = $renewal_orders_id;
+		$renewal_order_total['title'] = 'Total:';
+		$renewal_order_total['text'] = "<b>" . get_currency_format($renewal_sku['skus_price'], $renewal_order['currency']) . "</b>";
+		$renewal_order_total['value'] = $renewal_sku['skus_price'];
+		$renewal_order_total['class'] = 'ot_total';
+		$renewal_order_total['sort_order'] = '800';
+		tep_db_perform('orders_total', $renewal_order_total);
+
+		$renewal_order_subtotal = array();
+		$renewal_order_subtotal['orders_id'] = $renewal_orders_id;
+		$renewal_order_subtotal['title'] = 'Sub-Total:';
+		$renewal_order_subtotal['text'] = get_currency_format($renewal_sku['skus_price'], $renewal_order['currency']);
+		$renewal_order_subtotal['value'] = $renewal_sku['skus_price'];
+		$renewal_order_subtotal['class'] = 'ot_subtotal';
+		$renewal_order_subtotal['sort_order'] = '1';
+		tep_db_perform('orders_total', $renewal_order_subtotal);
+
+	} else {
+		log_renewal_process("ERROR: Unable to create renewal order.", $order['orders_id']);
+	}
+
+
+	debug($renewal_order, 'renewal_order');
+	debug($renewal_order_product, 'renewal_order_product');
+	debug($renewal_order_total, 'renewal_order_total');
+	debug($renewal_order_subtotal, 'renewal_order_subtotal');
+	debug($order, 'order');
+
+
+	return $renewal_orders_id;
+}
+
+
+function get_currency_format($number, $currency_type) {
+	//get the currencies
+	$currencies = unserialize(CURRENCIES);
+	return $currencies[$currency_type]['symbol_left'] . number_format(tep_round($number * $currencies[$currency_type]['value'], $currencies[$currency_type]['decimal_places']), $currencies[$currency_type]['decimal_places'], $currencies[$currency_type]['decimal_point'], $currencies[$currency_type]['thousands_point']) . $currencies[$currency_type]['symbol_right'];
+}
+
+// Wrapper function for round()
+function tep_round($number, $precision) {
+	if (strpos($number, '.') && (strlen(substr($number, strpos($number, '.')+1)) > $precision)) {
+		$number = substr($number, 0, strpos($number, '.') + 1 + $precision + 1);
+
+		if (substr($number, -1) >= 5) {
+			if ($precision > 1) {
+				$number = substr($number, 0, -1) + ('0.' . str_repeat(0, $precision-1) . '1');
+			} elseif ($precision == 1) {
+				$number = substr($number, 0, -1) + 0.1;
+			} else {
+				$number = substr($number, 0, -1) + 1;
+			}
+		} else {
+			$number = substr($number, 0, -1);
+		}
+	}
+
+	return $number;
+}
+
+function get_end_delivery_range($first_issue_delay_days) {
+	$fulfillment_batch_week_array = get_fulfillment_batch_week();
+	$fulfillment_batch_date = $fulfillment_batch_week_array['fulfillment_batch_date'];
+
+	if ($first_issue_delay_days > 0) {
+		$year = (int)substr($fulfillment_batch_date, 0, 4);
+		$month = (int)substr($fulfillment_batch_date, 5, 2);
+		$day = (int)substr($fulfillment_batch_date, 8, 2);
+		$hour = (int)substr($fulfillment_batch_date, 11, 2);
+		$minute = (int)substr($fulfillment_batch_date, 14, 2);
+		$second = (int)substr($fulfillment_batch_date, 17, 2);
+
+		//Calcuate the last day of the expected first issue date range.
+		//The batch_date + 3 gets to Wednesday when orders are sent for fulfillment.
+		//The first day of the range is the fulfillment day + the delay days.
+		//10 days is added for the last day of the date range.
+
+		$end_delivery_range_date = mktime($hour,$minute,$second,$month,$day,$year) + (86400 * ($first_issue_delay_days + 13));
+
+		return strftime(DATE_FORMAT_DB, $end_delivery_range_date);
+	} else {
+		return;
+	}
+}
+
+function get_fulfillment_batch_week($compare_date = '') {
+	if ($compare_date == '') {
+		$compare_date = 'now()';
+	}
+
+	$batch_week_query = tep_db_query('SELECT fulfillment_batch_date, fulfillment_batch_week
+                    				  FROM fulfillment_batch_week
+                    				  WHERE to_days( fulfillment_batch_date )  >= to_days(' . $compare_date . ')
+                    			      ORDER  BY fulfillment_batch_date ASC
+                    				  LIMIT 1');
+	return tep_db_fetch_array($batch_week_query);
+}
+
+function get_fulfillment_batch_id($products_id, $fulfillment_status_id, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period) {
+
+	//Because of potential transactional problems, we can't just do a search and then an insert, because
+	//another thread might have inserted in between our select and insert. Locking won't work either because
+	//we are using different threads each time we call tep_db_query. So I will just insert and the
+	//newly added tep_db_query_return_error function will allow the insert to fail, but continue the script.
+	// we can then check for error using tep_db_query_returned_error.
+	$result = tep_db_query_return_error("insert into " . TABLE_FULFILLMENT_BATCH . " (date_added, fulfillment_batch_week, fulfillment_batch_date, fulfillment_status_id, products_id, skus_type, skus_type_order, skus_type_order_period)
+              values (now(), '" . $fulfillment_batch_week . "', '" . $fulfillment_batch_date . "', '" . $fulfillment_status_id . "', '" . $products_id . "', '" . $skus_type . "', '" . $skus_type_order . "', '" . $skus_type_order_period . "')");
+
+
+	if (tep_db_query_returned_error()) {
+		//assuming duplicate error, so select batch_id form existing record.
+		$fulfillment_batch_query = tep_db_query("select fulfillment_batch_id from " . TABLE_FULFILLMENT_BATCH . " where products_id = '" . $products_id . "' and fulfillment_status_id = '" . $fulfillment_status_id . "' and fulfillment_batch_week = '" . $fulfillment_batch_week . "' and skus_type ='" . $skus_type . "' and skus_type_order = '" . $skus_type_order . "' and skus_type_order_period = '" . $skus_type_order_period . "'");
+		$fulfillment_batch_array = tep_db_fetch_array($fulfillment_batch_query);
+		$fulfillment_batch_id = $fulfillment_batch_array['fulfillment_batch_id'];
+	} else {
+		//no error,so get the new id.
+		$fulfillment_batch_id = tep_db_insert_id();
+	}
+
+	return $fulfillment_batch_id;
+
+}
+
+function create_fulfillment_batch_item($orders_id, $fulfillment_status_id, $orders_previous_status = '') {
+	if ($orders_id == '' || $fulfillment_status_id == '') {
+		return;
+	}
+
+	$update_orders_fulfillment_status_id = true;
+
+	//should always just have 1 orders_producst row so limit by 1.
+	$order_product_info_query = tep_db_query("select op.products_id, o.date_purchased, o.orders_status, o.fulfillment_batch_id, s.skus_type, s.skus_type_order, s.skus_type_order_period, if(p.first_issue_delay_days=0,pf.first_issue_delay_days, p.first_issue_delay_days) as first_issue_delay_days, o.prior_orders_id, o.is_renewal_order, s.skus_days_spanned from " . TABLE_ORDERS_PRODUCTS . " op, " . TABLE_ORDERS . " o, " . TABLE_SKUS . " s, " . TABLE_PRODUCTS . " p, " . TABLE_PUBLICATION_FREQUENCY . " pf where op.products_id = p.products_id and p.publication_frequency_id = pf.publication_frequency_id and o.orders_id = op.orders_id and s.skus_id = op.skus_id and o.orders_id = '" . $orders_id . "' limit 1");
+	$order_product_info_array = tep_db_fetch_array($order_product_info_query);
+	$products_id = $order_product_info_array['products_id'];
+	$first_issue_delay_days = $order_product_info_array['first_issue_delay_days'];
+	$skus_type = $order_product_info_array['skus_type'];
+	$skus_type_order = $order_product_info_array['skus_type_order'];
+	$skus_type_order_period = $order_product_info_array['skus_type_order_period'];
+	$prior_orders_id = $order_product_info_array['prior_orders_id'];
+	$is_renewal_order = $order_product_info_array['is_renewal_order'];
+	$orders_status = $order_product_info_array['orders_status'];
+	$days_spanned = $order_product_info_array['skus_days_spanned'];
+	$order_fulfillment_batch_id = $order_product_info_array['fulfillment_batch_id'];
+	$date_purchased =  $order_product_info_array['date_purchased'];
+
+	//If the subscription is less than 6 months, only delay fulfillment to the next
+	//batch week.
+
+	// If there is a previous order id, use the previous orders skus_days_spanned
+	if ($prior_orders_id != '') {
+		$prior_order_query = tep_db_query("select s.skus_days_spanned from " . TABLE_SKUS . " s,  " . TABLE_ORDERS_PRODUCTS . " op where s.products_id = op.products_id AND op.orders_id = '" . $prior_orders_id . "'");
+		$prior_order = tep_db_fetch_array($prior_order_query);
+
+		$days_spanned = $prior_order['skus_days_spanned'];
+	}
+
+	if ($days_spanned < 183) {
+		$renewal_fulfillment_delay = "DATE_ADD('" . $date_purchased . "' ,INTERVAL 7 DAY)";
+	} else {
+		$renewal_fulfillment_delay = "DATE_ADD('" . $date_purchased . "' ,INTERVAL 84 DAY)";
+	}
+
+	$fulfillment_delay_batch_week_array = get_fulfillment_batch_week($renewal_fulfillment_delay);
+	$fulfillment_delay_batch_week = $fulfillment_delay_batch_week_array['fulfillment_batch_week'];
+	$fulfillment_delay_batch_date = $fulfillment_delay_batch_week_array['fulfillment_batch_date'];
+
+	$fulfillment_current_batch_week_array = get_fulfillment_batch_week();
+	$fulfillment_current_batch_week = $fulfillment_current_batch_week_array['fulfillment_batch_week'];
+	$fulfillment_current_batch_date = $fulfillment_current_batch_week_array['fulfillment_batch_date'];
+
+	//if this is a renewals FULFILL batch item, we should always get the delay batch week, unless
+	//we've already gone past it.
+	if ( $fulfillment_status_id == FULFILLMENT_FULFILL_ID && $fulfillment_current_batch_week <= $fulfillment_delay_batch_week) {
+		$fulfillment_batch_week = $fulfillment_delay_batch_week_array['fulfillment_batch_week'];
+		$fulfillment_batch_date = $fulfillment_delay_batch_week_array['fulfillment_batch_date'];
+	} else {
+		//For the CANCEL batch item we use the current, because this is only a PENDING -> CANCEL
+		$fulfillment_batch_week = $fulfillment_current_batch_week_array['fulfillment_batch_week'];
+		$fulfillment_batch_date = $fulfillment_current_batch_week_array['fulfillment_batch_date'];
+	}
+
+	$fulfillment_batch_id = get_fulfillment_batch_id($products_id, $fulfillment_status_id, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period);
+	$sql_data_array = array('date_added' => 'now()',
+		'fulfillment_batch_id' => $fulfillment_batch_id,
+		'orders_id' => $orders_id);
+	tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, $sql_data_array);
+	$fulfillment_batch_items_id = tep_db_insert_id();
+
+	//this renewal process only cancel's PENDING orders, so we don't need to check
+	//the batch week.so add another record for ignore fulfillment.
+	if ($fulfillment_status_id == FULFILLMENT_CANCEL_ID) {
+		if ($orders_previous_status == DEFAULT_ORDERS_STATUS_ID) {
+			$fulfillment_batch_id = get_fulfillment_batch_id($products_id, FULFILLMENT_IGNORE_FULFILLMENT_ID, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period);
+			$sql_data_array = array('date_added' => 'now()',
+				'fulfillment_batch_id' => $fulfillment_batch_id,
+				'orders_id' => $orders_id);
+			tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, $sql_data_array);
+		}
+	} elseif ($fulfillment_status_id == FULFILLMENT_CHANGE_ADDRESS_ID) {
+		//if this is an address change we need to check to see if this is in the same batch week
+		//if so, we need to enter the fulfillment_change_address batch item and also
+		//add back in the batch item for whatever batch_item was there previous.
+		//use the orders' fulfillment_batch_id to see if we're in the same batchweek.
+		if ($order_fulfillment_batch_id != '') {
+			$order_fulfillment_batch_query = tep_db_query("select fb.fulfillment_status_id, fb.fulfillment_batch_week from " . TABLE_FULFILLMENT_BATCH . " fb where fb.fulfillment_batch_id = '" . $order_fulfillment_batch_id . "'");
+			$order_fulfillment_batch_array = tep_db_fetch_array($order_fulfillment_batch_query);
+			$order_fulfillment_batch_week = $order_fulfillment_batch_array['fulfillment_batch_week'];
+			$order_fulfillment_status_id = $order_fulfillment_batch_array['fulfillment_status_id'];
+
+			//if we are in the same batchweek as the most recent order fulfillment batch then add
+			//that batch back in, except if the previous status was a change address.
+			//we are checking to see if the $order_fulfillment_batch_week is greater or equal to the
+			//current batch week, because a renewal might have a delayed fulfillment batch item.
+			//so if it is the same batch week or if the batch week is in the future then
+			//add back in that batch week.
+			if ($order_fulfillment_status_id != FULFILLMENT_CHANGE_ADDRESS_ID && $order_fulfillment_batch_week >= $fulfillment_batch_week) {
+				$sql_data_array = array('date_added' => 'now()',
+					'fulfillment_batch_id' => $order_fulfillment_batch_id,
+					'orders_id' => $orders_id);
+				tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, $sql_data_array);
+				$update_orders_fulfillment_status_id = false;
+			}
+		} else {
+			//If there is no $order_fulfillment_batch_id, add in the ignore fulfillment.
+			//This means an address change was done on a Pending order.
+			$fulfillment_batch_id = get_fulfillment_batch_id($products_id, FULFILLMENT_IGNORE_FULFILLMENT_ID, $fulfillment_batch_week, $fulfillment_batch_date, $skus_type, $skus_type_order, $skus_type_order_period);
+			$sql_data_array = array('date_added' => 'now()',
+				'fulfillment_batch_id' => $fulfillment_batch_id,
+				'orders_id' => $orders_id);
+			tep_db_perform(TABLE_FULFILLMENT_BATCH_ITEMS, $sql_data_array);
+		}
+		//Add in the previous_address_book_id to the batch_item. Used to display on orders.
+		tep_db_query("update fulfillment_batch_items fbi, orders o set fbi.previous_delivery_address_book_id = o.previous_delivery_address_book_id where fbi.orders_id = o.orders_id and fbi.fulfillment_batch_items_id = '" . $fulfillment_batch_items_id . "'");
+
+	}
+
+	//In most cases we need to update the order to reflect the newly created batch_id
+	//but with address change within same batch week we don't have to since
+	//the last status should revert back to the original. So we can save an update here.
+	if ($update_orders_fulfillment_status_id) {
+		//only if this is a fulfill status go ahead and set the right delivery_range and renewal notice date.
+		//this is done here since renewals are delayed and might not get paid when we charge them (track2)
+		//so when we call this function with a fulfill_id we konw it was paid and ready for fulfillment.
+		$update_fulfill_fields = '';
+		if ($fulfillment_status_id == FULFILLMENT_FULFILL_ID) {
+			//Update the orders' end_delivery_range date
+			//also set the renew_date.
+			//also update the order's renewal_transactions_date so it won't get pulled again.
+			//this is being added in the update stmt below.
+			$update_fulfill_fields = ", renewal_transaction_date = null, end_delivery_range = '" . get_end_delivery_range($first_issue_delay_days) . "', renewal_date='" . get_renewal_date($orders_id) . "' ";
+		}
+
+
+		//Now add the last status to the order.fulfillment_batch_id field. Used in fulfillment process.
+		//this will always hold the most recent fulfillment status.
+		tep_db_query("update " . TABLE_ORDERS . " set fulfillment_batch_id = '" . $fulfillment_batch_id . "'" . $update_fulfill_fields . " where orders_id = '" . $orders_id . "'");
+		//The problem with the above is that it overwrites a previous batchweek's fulfillment_batch_id this causes us to not be able to
+		//rerun a run monday report and getting the same result. Therefore we need to make sure we do this by batch week and store that in separate table.
+		//I'll keep doing the previous since a lot of code it report are touching it.
+		//I am using the handy dandy replace since I have a unique index on orders and fulfillment_batch_week. This will always give me the latest
+		//batch_id for a particular batchweek.
+		tep_db_query("replace into " . TABLE_ORDERS_FULFILLMENT_BATCH_HISTORY . " (orders_id, fulfillment_batch_id, fulfillment_batch_week) values ('" . $orders_id . "', '" . $fulfillment_batch_id . "', '" .$fulfillment_batch_week . "')");
+
+		//update the products_ordered field for bestsellers
+
+
+
+		$select_clause = "select * from " . TABLE_ORDERS . " where orders_id ='$orders_id'";
+		$search_query = tep_db_query($select_clause);
+		while ($orders_paid_fetch = tep_db_fetch_array($search_query)) {
+			$paid_status = $orders_paid_fetch['orders_status'];
+		}
+
+		if($paid_status=="2"){
+			tep_db_query("update " . TABLE_PRODUCTS . " set products_ordered = products_ordered + 1 where products_id = '" . $products_id . "'");
+		}
+
+	}
+
+
+	return;
+}
+
+
+function log_renewal_process($action, $orders_id = '') {
+	if ($action == '') {
+		return;
+	}
+	if (DEBUG == 'true') {
+		print $action . " " . $orders_id . "\n";
+		tep_db_query("insert into renewal_process_log(date_entered, action, orders_id) values (now(), '" . $action ."', '" . $orders_id . "')");
+	} else {
+		tep_db_query("insert into renewal_process_log(date_entered, action, orders_id) values (now(), '" . $action ."', '" . $orders_id . "')");
+	}
+}
+//DB utility functions
+function tep_db_connect($server = DB_SERVER, $username = DB_SERVER_USERNAME, $password = DB_SERVER_PASSWORD, $database = DB_DATABASE, $link = 'db_link') {
+	global $$link;
+
+	if (USE_PCONNECT == 'true') {
+		$$link = mysqli_connect('p:' . $server, $username, $password,$database);
+	} else {
+		$$link = mysqli_connect($server, $username, $password,$database);
+	}
+
+//	if ($$link) mysqli_select_db($$link,$database);
+
+	return $$link;
+}
+
+function tep_db_close($link = 'db_link') {
+	global $$link;
+
+	return mysqli_close($$link);
+}
+
+function tep_db_query_returned_error($link = 'db_link') {
+	global $$link;
+	if (mysqli_errno($$link) != 0) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+function tep_db_error($query, $errno, $error) {
+	die($errno . ' - ' . $error . "\n\n" . $query . "\n\n[TEP STOP]\n\n");
+}
+
+function tep_db_query_return_error($query, $link = 'db_link') {
+	return tep_db_query($query, $link, true);
+}
+
+function tep_db_query($query, $link = 'db_link', $allow_error = false) {
+	global $$link;
+
+	if (defined('STORE_DB_TRANSACTIONS') && (STORE_DB_TRANSACTIONS == 'true')) {
+		error_log(date(RENEWALS_LOG_DATE_FORMAT) .'QUERY ' . $query . "\n", 3, RENEWALS_LOG);
+	}
+
+	$result = mysqli_query($$link, $query);
+
+	if (!$result && !$allow_error) {
+		tep_db_error($query, mysqli_errno($$link), mysqli_error());
+	}
+
+	if (defined('STORE_DB_TRANSACTIONS') && (STORE_DB_TRANSACTIONS == 'true')) {
+		if (!$allow_error) {
+			$result_error = mysqli_error();
+		} else {
+			$result_error = 'allowed error to pass through: ' . mysqli_error();
+		}
+		error_log(date(RENEWALS_LOG_DATE_FORMAT) .'RESULT ' . $result . ' ' . $result_error . "\n", 3, RENEWALS_LOG);
+	}
+
+	return $result;
+}
+
+function tep_db_perform($table, $data, $action = 'insert', $parameters = '', $link = 'db_link') {
+	reset($data);
+	if ($action == 'insert') {
+		$query = 'insert into ' . $table . ' (';
+		while (list($columns, ) = each($data)) {
+			$query .= $columns . ', ';
+		}
+		$query = substr($query, 0, -2) . ') values (';
+		reset($data);
+		while (list(, $value) = each($data)) {
+			switch ((string)$value) {
+				case 'null':
+					$query .= 'null, ';
+					break;
+				default:
+					//if there is a function related to now(), assume it doesn't need
+					//quotes.
+					if (strpos((string)$value, 'now()') === false) {
+						$query .= '\'' . tep_db_input($value) . '\', ';
+					} else {
+						$query .= tep_db_input($value) . ', ';
+					}
+					break;
+			}
+		}
+		$query = substr($query, 0, -2) . ')';
+	} elseif ($action == 'replace') {
+		$query = 'replace into ' . $table . ' (';
+		while (list($columns, ) = each($data)) {
+			$query .= $columns . ', ';
+		}
+		$query = substr($query, 0, -2) . ') values (';
+		reset($data);
+		while (list(, $value) = each($data)) {
+			switch ((string)$value) {
+				case 'now()':
+					$query .= 'now(), ';
+					break;
+				case 'null':
+					$query .= 'null, ';
+					break;
+				default:
+					$query .= '\'' . tep_db_input($value) . '\', ';
+					break;
+			}
+		}
+		$query = substr($query, 0, -2) . ')';
+	}elseif ($action == 'update') {
+		$query = 'update ' . $table . ' set ';
+		while (list($columns, $value) = each($data)) {
+			switch ((string)$value) {
+				case 'now()':
+					$query .= $columns . ' = now(), ';
+					break;
+				case 'null':
+					$query .= $columns .= ' = null, ';
+					break;
+				default:
+					$query .= $columns . ' = \'' . tep_db_input($value) . '\', ';
+					break;
+			}
+		}
+		$query = substr($query, 0, -2) . ' where ' . $parameters;
+	}
+
+	return tep_db_query($query, $link);
+}
+
+function tep_db_fetch_array($db_query) {
+	return mysqli_fetch_array($db_query, MYSQL_ASSOC);
+}
+
+function tep_db_num_rows($db_query) {
+	return mysqli_num_rows($db_query);
+}
+
+function tep_db_data_seek($db_query, $row_number) {
+	return mysqli_data_seek($db_query, $row_number);
+}
+
+function tep_db_insert_id($link = 'db_link') {
+	global $$link;
+	return mysqli_insert_id($$link);
+}
+
+function tep_db_free_result($db_query) {
+	return mysqli_free_result($db_query);
+}
+
+function tep_db_fetch_fields($db_query) {
+	return mysqli_fetch_field($db_query);
+}
+
+function tep_db_output($string) {
+	return htmlspecialchars($string);
+}
+
+function tep_db_input($string) {
+	return addslashes($string);
+}
+
+function tep_db_prepare_input($string) {
+	if (is_string($string)) {
+		return trim(tep_sanitize_string(stripslashes($string)));
+	} elseif (is_array($string)) {
+		reset($string);
+		while (list($key, $value) = each($string)) {
+			$string[$key] = tep_db_prepare_input($value);
+		}
+		return $string;
+	} else {
+		return $string;
+	}
+}
+
+function tep_sanitize_string($string) {
+	$string = ereg_replace(' +', ' ', trim($string));
+
+	return preg_replace("/[<>]/", '_', $string);
+}
+
+function tep_rand($min = null, $max = null) {
+	static $seeded;
+
+	if (!$seeded) {
+		mt_srand((double)microtime()*1000000);
+		$seeded = true;
+	}
+
+	if (isset($min) && isset($max)) {
+		if ($min >= $max) {
+			return $min;
+		} else {
+			return mt_rand($min, $max);
+		}
+	} else {
+		return mt_rand();
+	}
+}
+//Used for debug
+
+function debug($array,$root)
+{
+	if (DEBUG != 'true') return;
+
+	foreach (array_keys($array) as $element){
+		$my_array=$array[$element];
+		if(is_array($my_array))
+		{
+			debug($my_array,$root . "[" . $element . "]");
+		}
+		else
+		{
+			echo($root . "[" . $element . "]=" . $array[$element]) . "\n";
+		}
+	}
+	echo "\n";
+}
+
+function get_key() {
+	return md5('W1j Witt3 Wy4en W1l13n W3l Warm3 Woll$n WiNter W4nt3n Wa553n');
+}
+
+function get_pfp_pwd(){
+	$key = get_key();
+	$input = MODULE_PAYMENT_PAYFLOWPRO_PWD;
+	$input = str_replace("\n","",$input);
+	$input = str_replace("\t","",$input);
+	$input = str_replace("\r","",$input);
+	$input = base64_decode(trim(chop($input)));
+	$td = mcrypt_module_open ('tripledes', '', 'ecb', '');
+	$key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
+	$iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
+	mcrypt_generic_init ($td, $key, $iv);
+	$decrypted_data = mdecrypt_generic ($td, $input);
+	mcrypt_generic_deinit ($td);
+	mcrypt_module_close ($td);
+	return trim(chop($decrypted_data));
+}
+
+function encrypt_cc($input, $customer_id){
+
+	$key = get_key();
+	$input = str_replace("\n","",$input);
+	$input = str_replace("\t","",$input);
+	$input = str_replace("\r","",$input);
+	$td = mcrypt_module_open ('tripledes', '', 'ecb', '');
+	$key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
+	$iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
+	mcrypt_generic_init ($td, $key, $iv);
+	$encrypted_data = mcrypt_generic ($td, $input);
+	mcrypt_generic_deinit ($td);
+	mcrypt_module_close ($td);
+	return trim(chop(base64_encode($encrypted_data)));
+}
+
+
+//$input - stuff to decrypt
+//$key - the secret key to use
+
+function decrypt_cc($input, $customer_id){
+	$key = get_key();
+	$input = str_replace("\n","",$input);
+	$input = str_replace("\t","",$input);
+	$input = str_replace("\r","",$input);
+	$input = base64_decode(trim(chop($input)));
+	$td = mcrypt_module_open ('tripledes', '', 'ecb', '');
+	$key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
+	$iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
+	mcrypt_generic_init ($td, $key, $iv);
+	$decrypted_data = mdecrypt_generic ($td, $input);
+	mcrypt_generic_deinit ($td);
+	mcrypt_module_close ($td);
+	return trim(chop($decrypted_data));
+}
+
+function get_renewal_date($orders_id) {
+	if ($orders_id == '') {
+		return;
+	}
+	$order_info_query = tep_db_query("
+		select
+			s.renewal_lead_time as skus_renewal_lead_time,
+			s.skus_days_spanned,
+			p.renewal_lead_time as products_renewal_lead_time,
+			date_format(fbi.date_added, '%Y-%m-%d') as date_paid,
+			s.skus_type,
+			o.is_postcard_confirmation
+		from " .
+			TABLE_ORDERS . " o, " .
+			TABLE_FULFILLMENT_BATCH_ITEMS . " fbi, " .
+			TABLE_FULFILLMENT_BATCH . " fb, " .
+			TABLE_ORDERS_PRODUCTS . " op, " .
+			TABLE_SKUS . " s, " .
+			TABLE_PRODUCTS . " p
+		where
+			o.orders_id = op.orders_id
+			and o.orders_id = fbi.orders_id
+			and fbi.fulfillment_batch_id = fb.fulfillment_batch_id
+			and fb.fulfillment_status_id = 1
+			and op.products_id = p.products_id
+			and op.skus_id = s.skus_id
+			and o.orders_id = '" . $orders_id . "'
+		order by fbi.date_added desc
+		limit 1
+	");
+
+	$order_info_array = tep_db_fetch_array($order_info_query);
+
+	$skus_days_spanned = $order_info_array['skus_days_spanned'];
+	//first check sku, then product finally use default renewal lead time.
+	if ($order_info_array['skus_renewal_lead_time'] != 0) {
+		$renewal_lead_time = $order_info_array['skus_renewal_lead_time'];
+	} elseif ($order_info_array['products_renewal_lead_time'] != 0) {
+		$renewal_lead_time = $order_info_array['products_renewal_lead_time'];
+	} else {
+		$renewal_lead_time = DEFAULT_RENEWAL_LEADTIME;
+	}
+
+	if ($order_info_array['skus_type'] == 'INTRO') {
+		//renewal notice date for new orders is date paid + days_spanned - leadtime
+		$renewal_date = strtotime($order_info_array['date_paid']);
+		$renewal_date = strtotime('+' . $skus_days_spanned . ' days', $renewal_date);
+		$renewal_date = strtotime($renewal_lead_time . ' days ago', $renewal_date);
+	} else {
+		//renewal date for renewal orders is order_date + days_spanned
+		//no need to add lead time it is already built in since this is a renewal.
+		//so instread of  order_date + days_spanned - leadtime (which is for INTRO skus)
+		//we only need order_date + days_spanned
+
+		$renewal_date = strtotime($order_info_array['date_paid']);
+		$renewal_date = strtotime('+' . $skus_days_spanned . ' days', $renewal_date);
+	}
+
+	// 	If is_postcard_confirmation, modify the final renewal_date by ADDING the value from the configuration key
+	// 	DEFAULT_RENEWAL_CHARGE_DAYS and SUBTRACTING the value from the configuration key
+	// 	RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS.
+	if ($order_info_array['is_postcard_confirmation'] == '1'){
+		$renewal_date = strtotime('+' . DEFAULT_RENEWAL_CHARGE_DAYS . ' days', $renewal_date);
+		$renewal_date = strtotime(RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS . ' days ago', $renewal_date);
+	}
+	return strftime(DATE_FORMAT_DB, $renewal_date);
+}
+
+function tep_add_tax($price, $tax) {
+	global $currencies;
+
+	if ( (DISPLAY_PRICE_WITH_TAX == 'true') && ($tax > 0) ) {
+		return tep_round($price, $currencies->currencies[DEFAULT_CURRENCY]['decimal_places']) + tep_calculate_tax($price, $tax);
+	} else {
+		return tep_round($price, $currencies->currencies[DEFAULT_CURRENCY]['decimal_places']);
+	}
+}
+
+function get_percentage_saved($products_cover_price, $products_price) {
+	$percentage = 0;
+
+	if ($products_cover_price > 0) {
+		$percentageSaved = (100 * (1-(double)$products_price / $products_cover_price));
+		if ($percentageSaved > 0) {
+			$percentage = (int)$percentageSaved;
+		}
+	}
+	return $percentage;
+}
+
+function make_check_alpha($orders_id) {
+	// this should yield a letter code between capital P (Decimal 80)  and Y (Decimal 89), thus excluding "I", "O" and other baddies.
+	$my_check_digit = chr(80 + make_check_digit($orders_id));
+
+	// turn it into a string; better to leave the signature of this function as returning a string,
+	// in case we want to have checkAlphas which are actually multiple characters
+
+	return $my_check_digit;
+}
+
+function make_check_digit($orders_id) {
+	$sum = 0;
+	$variation_one_or_two = 2; //  gets flipped before its first use
+	$orders_id_array = strsplt($orders_id, 1);
+
+	for ($i=sizeof($orders_id_array) -1; $i >=0; $i--) {
+
+		if (is_numeric($orders_id_array[$i])) {
+			// let's deobfuscate this, this isn't assembly language, after all :)
+			// sum += (Character.getNumericValue(charArray[index]) * (variationOneOrTwo = (variationOneOrTwo == 2) ? 1 : 2));
+			$variation_one_or_two = ($variation_one_or_two == 2) ? 1 : 2; // flip variation between one and two
+			$sum += ($orders_id_array[$i] * $variation_one_or_two);
+		}
+	}
+	$check_digit = ($sum % 10);
+	return $check_digit;
+}
+
+function strsplt($thetext,$num)
+{
+	if (!$num){
+		$num=1;
+	}
+
+	$i=0;
+	$j=0;
+	$arr=array();
+	$x=floor(strlen($thetext)/$num);
+	while ($i<=$x){
+		$y=substr($thetext,$j,$num);
+		if (tep_not_null($y))
+		{
+			array_push($arr,$y);
+		}
+		$i++;
+		$j=$j+$num;
+	}
+	return $arr;
+}
+
+function get_template_dir($skinsites_id) {
+	$skinsites = unserialize(SKINSITES);
+
+	return $skinsites[$skinsites_id]['tplDir'];
+}
+
+function get_defined_skinsite_value($constant, $skinsites_id) {
+	$skinsite_configuration_values = unserialize(SKINSITES_CONFIGURATION);
+
+	if (array_key_exists($skinsites_id, $skinsite_configuration_values)) {
+		if (array_key_exists($constant, $skinsite_configuration_values[$skinsites_id])) {
+			return $skinsite_configuration_values[$skinsites_id][$constant];
+		} else {
+			return constant($constant);
+		}
+	} else {
+		return constant($constant);
+	}
+
+}
+//takes out the &#123; and replaces it with text version
+function tep_html_de_quotes($string) {
+	$trans_tbl = get_html_translation_table (HTML_ENTITIES);
+	$trans_tbl = array_flip ($trans_tbl);
+	$ret = strtr ($string, $trans_tbl);
+//	return preg_replace('/&#(\d+);/me', "chr('\\1')",$ret);
+//	return preg_replace_callback('/&#(\d+);/me', function($m) {return chr($m[1]); }, $ret);
+	return preg_replace_callback('/&#(\d+);/m', function($m) {return chr($m[1]); }, $ret);
+}
+
+function get_merchant_processor_reporting_group($skinsites_id) {
+
+	// Build query to retireve merchant processor reporting group.
+	$merchant_processor_reporting_group_query = tep_db_query ("select merchant_processor_reporting_group from " . TABLE_SKINSITES . " where skinsites_id = '" . tep_db_input($skinsites_id) . "' ");
+
+	if (tep_db_num_rows($merchant_processor_reporting_group_query) > 0) {
+		$merchant_processor_reporting_group_array = tep_db_fetch_array ($merchant_processor_reporting_group_query);
+
+		return $merchant_processor_reporting_group_array['merchant_processor_reporting_group'];
+	} else {
+		return '';
+	}
+}
+?>
