@@ -276,9 +276,9 @@ namespace BlueDolphin.Renewal
         private static Dictionary<string, object> transaction;
         private static List<string> orders_columns;
         private static List<string> orders_products_columns;
-        //private static Dictionary<string, object> renewels_billing_series_array;
+        //private static Dictionary<string, object> renewals_billing_series_array;
         //private static Dictionary<string, object> skinsites;
-        private static DataTable renewels_billing_series_array;
+        private static DataTable renewals_billing_series_array;
         private static DataTable skinsites;
         private static DataTable skinsites_configuration_defines;
         private static DataTable currencies;
@@ -1016,12 +1016,10 @@ namespace BlueDolphin.Renewal
 
                     //check to see if the order is still valid for charging
                     check_renewal_order_result = check_renewal_order();
-                    if (check_renewal_order_result != string.Empty)
+                    if (check_renewal_order_result != "true")
                     {
-
                         //Since this isn't a valid renewal order anylonger, we don't charge, set the charge_date = null
                         //so it won't get pulled again.
-
                         command2 = new MySqlCommand(@"update orders set renewal_transaction_date = null where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
                         command2.ExecuteNonQuery();
 
@@ -1311,7 +1309,7 @@ namespace BlueDolphin.Renewal
 
                 //loop through each billing series and create a renewal invoice for any orders that needs it.
                 //add in the delay for each effort
-                foreach (DataRow rs in renewels_billing_series_array.Rows)
+                foreach (DataRow rs in renewals_billing_series_array.Rows)
                 {
 
                     renewals_billing_series_id = Convert.ToInt32(rs["renewals_billing_series_id"]);
@@ -1425,15 +1423,16 @@ namespace BlueDolphin.Renewal
             try
             {
                 int number_of_renewal_invoices_created = 0;
-
+                int n = renewals_billing_series_array.Rows.Count;
+                string comment = string.Empty;
+                string next_effort_delay = string.Empty;
+                bool existsNextEffort = false;
+                bool create_next_effort;
+                bool mysqlError = false;
                 //rearrange the billing series array so we can pick the next effort
                 //for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
-                //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
-
-                //rearrange the billing series array so we can pick the next effort
-                //for($i=0, $n=sizeof($renewals_billing_series_array); $i<$n;$i++) {
-                //$renewels_billing_series[$renewals_billing_series_array[$i]["renewals_billing_series_id"]][$renewals_billing_series_array[$i]["effort_number"]] = $renewals_billing_series_array[$i];
-                //	}
+		        //$renewels_billing_series[$renewals_billing_series_array[$i]['renewals_billing_series_id']][$renewals_billing_series_array[$i]['effort_number']] = $renewals_billing_series_array[$i];
+	            //}
 
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = @"
@@ -1474,60 +1473,98 @@ namespace BlueDolphin.Renewal
                     continuous_service = Convert.ToInt32(myReader["continuous_service"]);
                     auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 
-                    bool create_next_effort = true;
-
+                    create_next_effort = true;
                     int next_effort_number = renewals_billing_series_effort_number + 1;
 
+                    //check to see if the order is still valid for invoice creation, if not then update the invoice
+                    //and move on to next order.
+                    check_renewal_order_result = check_renewal_order();
+                    if (check_renewal_order_result != "true")
+                    {
+                        comment = "Next effort for this invoice was not created because " + check_renewal_order_result;
+                        comment = comment.Replace("'", "\\'");
+                        command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments='" + comment + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+
+                        continue;
+                    }
+                    //check to see if there is a next effort for this series.
+                    foreach (DataRow dr in renewals_billing_series_array.Rows)
+                    {
+                        if (dr["renewals_billing_series_id"].ToString() == renewals_billing_series_id.ToString() && dr["effort_number"].ToString() == next_effort_number.ToString())
+                        {
+                            existsNextEffort = true;
+                            next_effort_delay = dr["delay_in_days"].ToString();
+                            break;
+                        }
+                        else
+                        {
+                            existsNextEffort = false;
+                        }
+                    }
+
+                    if (existsNextEffort == false)
+                    {
+                        create_next_effort = false;
+                        comment = "Next effort for this invoice was not created because there are no more efforts for this billing series.";
+                    }
+                    else
+                    {
+                        comment = "Next effort for this invoice was created.";
+                    }
+
+                    if (create_next_effort)
+                    {
+                        //this is where we create the next one.
+                        //Let's check to make sure the user hasn't already been entered for the same order
+                        //if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
+                        // it will allow us to continue. Which is what we want here. We add the delay here.
+                        string create_renewal_invoice_query_string2 = @"insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
+                        values (DATE_ADD(curdate(),INTERVAL " + next_effort_delay + " DAY), '" + orders_id.ToString() + "', '" + customers_id.ToString() + "', '" + renewals_billing_series_id.ToString() + "', " + next_effort_number.ToString() + ", '1')";
+
+                        try
+                        {
+                            command5 = new MySqlCommand(create_renewal_invoice_query_string2, myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+
+                        }
+                        catch (MySqlException ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                            if (ex.Message.Contains("Duplicate"))
+                            {
+                                mysqlError = true;
+                                //if there was an error let's record that.
+                                log_renewal_process("Warning: create_additional_renewal_invoice tried to insert the same user,same order, same effort (" + create_renewal_invoice_query_string2 + ")", orders_id);
+                            }
+                        }
+
+                        number_of_renewal_invoices_created++;
+                    }
+
+                    //set this invoice' in_progress to 0. Used for clean up later.
+                    if (create_next_effort)
+                    {
+                        comment = comment.Replace("'", "\\'");
+                        command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments='" + comment + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+                    }
+                    else
+                    {
+                        //don't set the in_progress to 0 since it is the last effort. We'll clean this one up during
+			            //mass cancel,since it is allowed to be active for cancel delay days.
+                        comment = comment.Replace("'", "\\'");
+                        command5 = new MySqlCommand("update renewals_invoices set comments='" + comment + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+                    }
                 }
 
                 myReader.Close();
 
-                //check to see if the order is still valid for invoice creation, if not then update the invoice
-                //and move on to next order.
-                /*	$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
-		if ($check_renewal_order_result !== true) {
-			$comment = "Next effort for this invoice was not created because " . $check_renewal_order_result;
-			tep_db_query("update renewals_invoices set in_progress = 0, comments="" . tep_db_input($comment) . "" where renewals_invoices_id = "" . $renewals_invoices_id . """);
-			continue;
-		}
-
-		//check to see if there is a next effort for this series.
-		if (!isset($renewels_billing_series[$renewals_billing_series_id][$next_effort_number])) {
-			$create_next_effort = false;
-			$comment = "Next effort for this invoice was not created because there are no more efforts for this billing series.";
-		} else {
-			$next_effort_delay = $renewels_billing_series[$renewals_billing_series_id][$next_effort_number]["delay_in_days"];
-			$comment = "Next effort for this invoice was created.";
-		}
-
-		if ($create_next_effort) {
-			//this is where we create the next one.
-			//Let"s check to make sure the user hasn"t already been entered for the same order
-			//if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
-			// it will allow us to continue. Which is what we want here. We add the delay here.
-			$create_renewal_invoice_query_string = "insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
-                      values (DATE_ADD(curdate(),INTERVAL " . $next_effort_delay . " DAY), "" . $orders_id . "", "" . $customers_id . "", "" . $renewals_billing_series_id . "", $next_effort_number, "1")";
-
-			$result = tep_db_query_return_error($create_renewal_invoice_query_string);
-
-			//if there was an error let"s record that.
-			if (tep_db_query_returned_error()) {
-				log_renewal_process("Warning: create_additional_renewal_invoice tried to insert the same user,same order, same effort (" . $create_renewal_invoice_query_string . ")", $orders_id);
-			}
-			$number_of_renewal_invoices_created++;
-
-		}
-
-		//set this invoice" in_progress to 0. Used for clean up later.
-		if ($create_next_effort) {
-			tep_db_query("update renewals_invoices set in_progress = 0, comments="" . tep_db_input($comment) . "" where renewals_invoices_id = "" . $renewals_invoices_id . """);
-		} else {
-			//don"t set the in_progress to 0 since it is the last effort. We"ll clean this one up during
-			//mass cancel,since it is allowed to be active for cancel delay days.
-			tep_db_query("update renewals_invoices set comments="" . tep_db_input($comment) . "" where renewals_invoices_id = "" . $renewals_invoices_id . """);
-
-		}
-	}*/
                 return number_of_renewal_invoices_created;
 
             }
@@ -1688,39 +1725,6 @@ namespace BlueDolphin.Renewal
                     cc_number_display = myReader["cc_number_display"].ToString();
                     template_directory = myReader["tplDir"].ToString();
                     skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
-
-                    /*	// Check to make sure we can still process this paper invoice.
-		// If not print why and stop processing renewal invoice.
-		$check_renewal_order_result = check_renewal_order($skus_type_order, $skus_status, $products_id, $prior_orders_id, $continuous_service, $auto_renew, $renewal_order_status);
-		if ($check_renewal_order_result !== true) {
-			//set the in_progress to 0. Used for clean up later.
-			$comments = "This paper effort was not created because " . $check_renewal_order_result;
-			tep_db_query("update renewals_invoices set in_progress = 0, comments = "" . $comments . "" where renewals_invoices_id = "" . $renewals_invoices_id . """);
-			continue;
-		}
-
-		// Insert a new row into our paper invoices file
-		tep_db_query("insert into paper_invoices (customers_id, billing_first_name, billing_last_name, billing_address_line_1, billing_address_line_2, billing_city, billing_state,
-					billing_postal_code, delivery_first_name, delivery_last_name, delivery_address_line_1, delivery_address_line_2, delivery_city, delivery_state,
-					delivery_postal_code, product_name, price, term, effort_number, orders_id, date_purchased, amount_owed, amount_paid, email_address,
-					renewals_billing_series_code, cc_number_display, template_directory, site_id, created_date, modified_date, active)
-					values ("" . $customers_id . "", "" . tep_db_input($billing_first_name) . "", "" . tep_db_input($billing_last_name) . "", "" . tep_db_input($billing_address_line_1) . "", "", "" . tep_db_input($billing_city) . "", "" . $billing_state . "",
-					"" . tep_db_input($billing_postal_code) . "", "" . tep_db_input($delivery_first_name) . "", "" . tep_db_input($delivery_last_name) . "", "" . tep_db_input($delivery_address_line_1) . "", "", "" . tep_db_input($delivery_city) . "", "" . $delivery_state . "",
-					"" . tep_db_input($delivery_postal_code) . "", "" . tep_db_input($products_name) . "", "" . $price . "", "" . $skus_term . "", "" . $effort_number . "", "" . $orders_id . "", "" . $date_purchased . "",
-					"" . $amount_owed . "", "" . $amount_paid . "", "" . $email_address . "", "" . tep_db_input($renewals_billing_series_code) . "", "" . tep_db_input($cc_number_display) . "", "" . tep_db_input($template_directory) . "", "" . $skinsites_id . "", now(), now(), 1)");
-
-		// Increment our number of papaer invoices by one.
-		$number_of_renewal_paper_invoices_file_records++;
-
-		// Update the was_sent flag.
-		tep_db_query("update renewals_invoices
-					  set was_sent=1, date_sent=now()
-					  where renewals_invoices_id="" . $renewals_invoices_id . """);
-
-		// Update the order"s invoices_sent flag.
-		tep_db_query("update orders set renewal_invoices_sent=1 where orders_id="" . $orders_id . """);
-     * 
-     * */
                 }
 
                 myReader.Close();
@@ -1731,7 +1735,6 @@ namespace BlueDolphin.Renewal
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
         }
 
@@ -1871,25 +1874,19 @@ namespace BlueDolphin.Renewal
                 read = command.ExecuteReader();
                 while (read.Read())
                 {
-
                     skus_days_spanned = Convert.ToInt32(read["skus_days_spanned"]);
-
                 }
                 //first check sku, then product finally use default renewal lead time.
-                if (Convert.ToInt32(read["skus_renewal_lead_time"]) != 0) {
-
+                if (Convert.ToInt32(read["skus_renewal_lead_time"]) != 0)
+                {
                     renewal_lead_time = read["products_renewal_lead_time"].ToString();
-
                 }
                 else
                 {
-
                     renewal_lead_time = DEFAULT_RENEWAL_LEADTIME;
-
                 }
                 if (read["skus_type"].ToString() == "INTRO")
                 {
-
                     //renewal notice date for new orders is date paid + days_spanned - leadtime
                     renewal_date = DateTime.Parse(read["date_paid"].ToString());
                     renewal_date = renewal_date.AddDays(skus_days_spanned);
@@ -1897,14 +1894,12 @@ namespace BlueDolphin.Renewal
                 }
                 else
                 {
-
                     //renewal date for renewal orders is order_date + days_spanned
                     //no need to add lead time it is already built in since this is a renewal.
                     //so instread of  order_date + days_spanned - leadtime (which is for INTRO skus)
                     //we only need order_date + days_spanned
                     renewal_date = DateTime.Parse(read["date_paid"].ToString());
                     renewal_date = renewal_date.AddDays(skus_days_spanned);
-
                 }
 
                 // 	If is_postcard_confirmation, modify the final renewal_date by ADDING the value from the configuration key
@@ -1912,7 +1907,6 @@ namespace BlueDolphin.Renewal
                 // 	RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS.
                 if (read["is_postcard_confirmation"].ToString() == "1")
                 {
-
                     renewal_date = renewal_date.AddDays(Convert.ToInt32(DEFAULT_RENEWAL_CHARGE_DAYS));
                     renewal_date = renewal_date.AddDays(Convert.ToInt32(RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS)*-1);
                 }
@@ -1924,13 +1918,11 @@ namespace BlueDolphin.Renewal
             {
                 Console.WriteLine(e.Message);
                 return string.Empty;
-
             }
         }
 
         private static string check_renewal_order()
         {
-
             //If a renewal order is placed, at the time of the sending of email or charging the card,
             //or getting check, the product and sku could be changed to
             //inactive. If the product is inactive and there are no renewal sku active at all for that
@@ -1942,7 +1934,7 @@ namespace BlueDolphin.Renewal
 
             try
             {
-                check_renewal_order_result = string.Empty;
+                check_renewal_order_result = "true";
 
                 if (skus_status == 0)
                 {
@@ -2382,11 +2374,11 @@ namespace BlueDolphin.Renewal
 			        renewals_billing_series";
 
                 command7.ExecuteNonQuery();
-                renewels_billing_series_array = new DataTable();
+                renewals_billing_series_array = new DataTable();
 
                 using (MySqlDataAdapter da = new MySqlDataAdapter(command7))
                 {
-                    da.Fill(renewels_billing_series_array);
+                    da.Fill(renewals_billing_series_array);
 
                 }
 
@@ -3487,7 +3479,6 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return string.Empty;
             }
-
         }
     }
 }
