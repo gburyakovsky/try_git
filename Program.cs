@@ -286,11 +286,9 @@ namespace BlueDolphin.Renewal
         private static DataTable getFulfillmentBatchWeek = null;
         private static DataTable fulfillment_delay_batch_week_array;
         private static DataTable fulfillment_current_batch_week_array;
-
         /// <summary>
         /// 
         /// </summary>
-
         //DatabaseTables dt = new DatabaseTables();
         public static string connectionString =
             ConfigurationManager.ConnectionStrings["databaseConnectionString"].ToString();
@@ -411,16 +409,12 @@ namespace BlueDolphin.Renewal
                 //tep_mail("Martin Schmidt", "mschmidt@mcswebsolutions.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
 
                 myConn.Close();
-
                 Console.ReadLine();
             }
-
             catch (Exception e)
             {
-
                 Console.WriteLine(e.Message);
             }
-
         }
 
         private static int init_renewal_orders()
@@ -500,11 +494,9 @@ namespace BlueDolphin.Renewal
                     if (original_order_skus_type.ToString() == "INTRO")
                     {
                         renewal_skus_type_order_period = "1";
-
                     }
                     else
                     {
-
                         //add 1 to the renewal skus type order year to get the next renewal sku in line for the same
                         //skus_type_order.
                         renewal_skus_type_order_period =
@@ -556,7 +548,6 @@ namespace BlueDolphin.Renewal
                     while (myReader2.Read())
                     {
                         num_skus++;
-
                     }
 
                     myReader2.Close();
@@ -612,10 +603,8 @@ namespace BlueDolphin.Renewal
                                 command5.ExecuteNonQuery();
 
                             }
-                            else
-                            // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
+                            else // If there are potential renewal SKUs with this order's skus_type_order, are none ACTIVE?
                             {
-
                                 string potential_ACTIVE_renewal_skus_query_string =
                                     "select * from skus where products_id = '" + original_order_products_id.ToString() +
                                     "' and skus_type = 'RENEW' and skus_type_order='" +
@@ -644,17 +633,12 @@ namespace BlueDolphin.Renewal
                                             original_order_id.ToString() + "'", myConn);
                                     command6.ExecuteNonQuery();
                                 }
-
                                 activeSku.Close();
                             }
-
                             yesSku.Close();
-
                         }
-
                         noSku.Close();
                         continue;
-
                     } // END MCS MOD FOR RECORDING REASON FOR FAILED POTENTIAL SKU SEARCH
 
                     Dictionary<string, object> renewal_sku = new Dictionary<string, object>();
@@ -672,7 +656,6 @@ namespace BlueDolphin.Renewal
                         if (Convert.ToInt32(myReader2["skus_type_order_period"]) ==
                             Convert.ToInt32(renewal_skus_type_order_period))
                         {
-
                             for (int lp = 0; lp < myReader2.FieldCount; lp++)
                             {
                                 renewal_sku.Add(myReader2.GetName(lp), myReader2.GetValue(lp));
@@ -725,7 +708,6 @@ namespace BlueDolphin.Renewal
                     //at this point we know there isn't any valid renewal sku, so move on to the next order.
                     if (renewal_sku.Count == 0 || renewal_sku == null)
                     {
-
                         //restored error_description
                         string update_sql = "update " + TABLE_ORDERS +
                                             " set renewal_error='1', renewal_error_description='Error: renewal sku with proper sku type order period (1 to " +
@@ -740,7 +722,6 @@ namespace BlueDolphin.Renewal
                             Console.WriteLine("no renewal sku found\n");
 
                         continue;
-
                     }
 
                     myReader2.Close();
@@ -761,7 +742,6 @@ namespace BlueDolphin.Renewal
                     }
                     else
                     {
-
                         if (orders_array["cc_number"].ToString() == string.Empty &&
                             orders_array["renewal_cc_number"].ToString() == string.Empty)
                         {
@@ -775,7 +755,6 @@ namespace BlueDolphin.Renewal
                         {
                             renewals_billing_series_id = Convert.ToInt32(TRACK2_BAD_CC);
                         }
-
                     }
 
                     if (Debug)
@@ -789,7 +768,6 @@ namespace BlueDolphin.Renewal
 
                     if (renewal_orders_id != 0)
                     {
-
                         // Update our original order setting the renewal_date to null to prevent the order from being picked up again and
                         // a duplicate renewal being created. Also set renewal_orders_id so we can associate the original and renewal orders.
 
@@ -802,7 +780,6 @@ namespace BlueDolphin.Renewal
 
                         if (Debug)
                             Console.WriteLine("Created renewal order\n");
-
                     }
 
                     if (Debug)
@@ -813,18 +790,14 @@ namespace BlueDolphin.Renewal
                     renewal_sku.Clear();
                     orders_array.Clear();
                 }
-
                 myReader.Close();
-
                 return number_of_renew_invoices_prepared;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
-
         }
 
         private static int charge_renewal_orders()
@@ -933,10 +906,8 @@ namespace BlueDolphin.Renewal
                     }
 
                     isNumeric = int.TryParse(cc_expires_month, out n);
-
                     if (!isNumeric)
                     {
-
                         cc_expires_month = DateTime.Now.Month.ToString();
                     }
 
@@ -982,36 +953,29 @@ namespace BlueDolphin.Renewal
                     {
                         if (is_date_stale(cc_expires_month, cc_expires_year))
                         {
-
                             cc_expires_year = (Convert.ToInt32(cc_expires_year) + 3).ToString();
                         }
                         if (is_date_stale(cc_expires_month, cc_expires_year))
                         {
-
                             cc_expires_year = DateTime.Now.Year.ToString();
                         }
-
                     }
                     // If modified expiration date failed in second charge attempt
                     if (renewals_expiration_date_failures == 2)
                     {
                         if (is_date_stale(cc_expires_month, cc_expires_year))
                         {
-
                             cc_expires_year = (Convert.ToInt32(cc_expires_year) + 2).ToString();
                         }
                         if (is_date_stale(cc_expires_month, cc_expires_year))
                         {
-
                             cc_expires_year = (DateTime.Now.Year + 1).ToString();
                         }
-
                     }
                     /* END NEW DATE MODS. */
                     // Make sure our month and year are two digits.
                     cc_expires_year = cc_expires_year.PadLeft(2, '0');
                     cc_expires_month = cc_expires_month.PadLeft(2, '0');
-
                     cc_expires = cc_expires_month + "" + cc_expires_year;
 
                     //check to see if the order is still valid for charging
@@ -1022,15 +986,12 @@ namespace BlueDolphin.Renewal
                         //so it won't get pulled again.
                         command2 = new MySqlCommand(@"update orders set renewal_transaction_date = null where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
                         command2.ExecuteNonQuery();
-
                         log_renewal_process("charge_renewal_orders(): Not charging this order, because " + check_renewal_order_result, renewal_orders_id);
                         continue;
                     }
 
                     if (renewal_invoices_created == 0 || renewal_invoices_sent == 0)
                     {
-
-
                         log_renewal_process("charge_renewal_orders(): Not charging this order, because the renewal_invoices_created was " + renewal_invoices_created.ToString() + " and renewal_invoices_sent is " + renewal_invoices_sent.ToString() + ". Both need to be 1!", renewal_orders_id);
                         continue;
                     }
@@ -1212,9 +1173,7 @@ namespace BlueDolphin.Renewal
                                 command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments = 'Charging was not successful, putting the order in track 2 (was 1014 now 1015)' where orders_id = '" + orders_id.ToString() + "'", myConn);
                                 command5.ExecuteNonQuery();
                                 command5.Dispose();
-
                             }
-
                             //update the order so it won't get pulled again.
                             command5 = new MySqlCommand("update orders set renewal_transaction_date = null where orders_id = '" + orders_id.ToString() + "'", myConn);
                             command5.ExecuteNonQuery();
@@ -1280,16 +1239,13 @@ namespace BlueDolphin.Renewal
                          number_of_renewal_charged++;
                     }
                 }
-
                 myReader.Close();
-
                 return number_of_renewal_charged;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
         }
 
@@ -1301,7 +1257,6 @@ namespace BlueDolphin.Renewal
                 //$renewals_billing_series_array = unserialize(RENEWALS_BILLING_SERIES);
                 
                 int number_of_renewal_invoices_created = 0;
-
                 int renewals_billing_series_id;
                 int renewals_billing_series_delay;
                 int renewals_billing_series_effort_number;
@@ -1311,7 +1266,6 @@ namespace BlueDolphin.Renewal
                 //add in the delay for each effort
                 foreach (DataRow rs in renewals_billing_series_array.Rows)
                 {
-
                     renewals_billing_series_id = Convert.ToInt32(rs["renewals_billing_series_id"]);
                     renewals_billing_series_delay = Convert.ToInt32(rs["delay_in_days"]);
                     renewals_billing_series_effort_number = Convert.ToInt32(rs["effort_number"]);
@@ -1321,7 +1275,6 @@ namespace BlueDolphin.Renewal
                     {
                         continue;
                     }
-
                     //only grab the last 30 days worth. No need to get all orders ever.
                     string renewal_orders_query_string = @"
 			select
@@ -1376,12 +1329,9 @@ namespace BlueDolphin.Renewal
                         
                         try
                         {
-
                             command5 = new MySqlCommand(create_renewal_invoice_query_string, myConn);
                             command5.ExecuteNonQuery();
                             command5.Dispose();
-
-
                         }
                         catch (MySqlException ex)
                         {
@@ -1392,34 +1342,27 @@ namespace BlueDolphin.Renewal
                                 //if there was an error let's record that.
                                 log_renewal_process("Warning: create_renewal_invoice tried to insert the same user,same order, same effort (" + create_renewal_invoice_query_string + ")", orders_id);
                             }
-                            
                         }
                         //if there was an error or not, we need to update the order so it won't get pulled again.
                         command5 = new MySqlCommand("update orders set renewal_invoices_created = 1 where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
                         command5.ExecuteNonQuery();
                         command5.Dispose();
-
                         number_of_renewal_invoices_created++;
                     }
-
                     myReader.Close();
                 }
-
                 return number_of_renewal_invoices_created;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
-
         }
 
         private static int create_additional_renewal_invoices()
         {
             //go through only pending orders, which haven"t been sent yet and are in progress
-
             try
             {
                 int number_of_renewal_invoices_created = 0;
@@ -1486,7 +1429,6 @@ namespace BlueDolphin.Renewal
                         command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments='" + comment + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
                         command5.ExecuteNonQuery();
                         command5.Dispose();
-
                         continue;
                     }
                     //check to see if there is a next effort for this series.
@@ -1528,7 +1470,6 @@ namespace BlueDolphin.Renewal
                             command5 = new MySqlCommand(create_renewal_invoice_query_string2, myConn);
                             command5.ExecuteNonQuery();
                             command5.Dispose();
-
                         }
                         catch (MySqlException ex)
                         {
@@ -1540,7 +1481,6 @@ namespace BlueDolphin.Renewal
                                 log_renewal_process("Warning: create_additional_renewal_invoice tried to insert the same user,same order, same effort (" + create_renewal_invoice_query_string2 + ")", orders_id);
                             }
                         }
-
                         number_of_renewal_invoices_created++;
                     }
 
@@ -1562,19 +1502,14 @@ namespace BlueDolphin.Renewal
                         command5.Dispose();
                     }
                 }
-
                 myReader.Close();
-
                 return number_of_renewal_invoices_created;
-
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
-
         }
 
         private static int send_renewal_email_invoices()
@@ -1613,9 +1548,7 @@ namespace BlueDolphin.Renewal
 												and to_days(ri.date_to_be_sent) <= to_days(curdate())
  												and rbs.renewals_invoices_type = 'EMAIL'";
                 command.ExecuteNonQuery();
-
                 string renewals_email_name = string.Empty;
-
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
@@ -1639,16 +1572,13 @@ namespace BlueDolphin.Renewal
                     skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
                     is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
                 }
-
                 myReader.Close();
-
                 return number_of_email_renewal_invoices_sent;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
         }
 
@@ -1656,7 +1586,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 // Go through only pending orders, which haven"t been sent yet and are in progress
                 string renewal_invoices_info_query_string = @"select *
 												from renewals_invoices ri,
@@ -1681,11 +1610,9 @@ namespace BlueDolphin.Renewal
 
                 // Set our number of processed paper invoices to its default value of zero.
                 int number_of_renewal_paper_invoices_file_records = 0;
-
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = renewal_invoices_info_query_string;
                 command.ExecuteNonQuery();
-
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
                 while (myReader.Read())
@@ -1726,9 +1653,7 @@ namespace BlueDolphin.Renewal
                     template_directory = myReader["tplDir"].ToString();
                     skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
                 }
-
                 myReader.Close();
-
                 return number_of_renewal_paper_invoices_file_records;
             }
             catch (Exception e)
@@ -1740,12 +1665,9 @@ namespace BlueDolphin.Renewal
 
         private static int clean_up_renewal_invoices()
         {
-
             //move any renewal invoice where in progress is 0 or was sent.
-
             try
             {
-
                 int number_of_renewal_invoices_cleaned_up = 0;
                 int renewals_invoices_id;
 
@@ -1779,27 +1701,22 @@ namespace BlueDolphin.Renewal
 
                     number_of_renewal_invoices_cleaned_up++;
                 }
-
                 myReader.Close();
-
                 return number_of_renewal_invoices_cleaned_up;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
         }
 
         private static int mass_cancel_renewal_orders()
         {
-
             //mass cancel renewal orders. We look at the cancel_delay on the billing series
             //which we will add to the time the last invoice was sent and if the time
             //has expired we simply cancel the order (if it was still Pending).
             //we also need to cancel any still Pending orders that have moved to history.
-
             try
             {
                 int number_of_mass_cancelled_orders = 0;
@@ -1818,14 +1735,12 @@ namespace BlueDolphin.Renewal
 												and rbs.cancel_delay is not null
 												and to_days(now()) > to_days(DATE_ADD(ri.date_sent,INTERVAL rbs.cancel_delay DAY))";
                 command.ExecuteNonQuery();
-
                 return number_of_mass_cancelled_orders;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 return 0;
-
             }
         }
 
@@ -1839,7 +1754,6 @@ namespace BlueDolphin.Renewal
 
                 if (orders_id.ToString() == string.Empty)
                 {
-
                     return string.Empty;
                 }
 
@@ -1931,7 +1845,6 @@ namespace BlueDolphin.Renewal
             // pulled here) is inactive (Matt has changed the price/remit)
             // then we need to do a quick check to see if there is at least another active for that
             // product for the same skus_type_order. Fulfillment will take care of the rest.
-
             try
             {
                 check_renewal_order_result = "true";
