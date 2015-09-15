@@ -1301,25 +1301,31 @@ namespace BlueDolphin.Renewal
             try
             {
                 //$renewals_billing_series_array = unserialize(RENEWALS_BILLING_SERIES);
+                
                 int number_of_renewal_invoices_created = 0;
 
-                string renewals_billing_series_id = string.Empty;
-                string renewals_billing_series_delay = string.Empty;
+                int renewals_billing_series_id;
+                int renewals_billing_series_delay;
+                int renewals_billing_series_effort_number;
+                bool mysqlError = false;
 
                 //loop through each billing series and create a renewal invoice for any orders that needs it.
                 //add in the delay for each effort
-                /*foreach ($renewals_billing_series_array as $renewals_billing_series) {
-		$renewals_billing_series_id = $renewals_billing_series['renewals_billing_series_id'];
-		$renewals_billing_series_delay = $renewals_billing_series['delay_in_days'];
-		$renewals_billing_series_effort_number=$renewals_billing_series['effort_number'];
+                foreach (DataRow rs in renewels_billing_series_array.Rows)
+                {
 
-		//this is only the first effort so move on to the next if this is effort 2 and above.
-		if ( $renewals_billing_series_effort_number > 1 ) {
-			continue;
-		}*/
+                    renewals_billing_series_id = Convert.ToInt32(rs["renewals_billing_series_id"]);
+                    renewals_billing_series_delay = Convert.ToInt32(rs["delay_in_days"]);
+                    renewals_billing_series_effort_number = Convert.ToInt32(rs["effort_number"]);
 
-                //only grab the last 30 days worth. No need to get all orders ever.
-                string renewal_orders_query_string = @"
+                    //this is only the first effort so move on to the next if this is effort 2 and above.
+                    if (renewals_billing_series_effort_number > 1)
+                    {
+                        continue;
+                    }
+
+                    //only grab the last 30 days worth. No need to get all orders ever.
+                    string renewal_orders_query_string = @"
 			select
 				o.*, op.*, s.*, p.continuous_service, p.products_status
 			from
@@ -1335,55 +1341,72 @@ namespace BlueDolphin.Renewal
 				and o.renewal_invoices_sent = 0
 				and o.orders_status = 1
 				and o.is_renewal_order = 1
-				and o.renewals_billing_series_id = " + renewals_billing_series_id + @"
+				and o.renewals_billing_series_id = " + renewals_billing_series_id.ToString() + @"
 				and to_days(o.date_purchased) > to_days(DATE_SUB(curdate(),INTERVAL 60 DAY))
 				and to_days(o.date_purchased) <= to_days(DATE_SUB(curdate(),INTERVAL " + renewals_billing_series_delay + @" DAY))
 		";
 
-                //we will create an invoice for any valid renewal orders (including ones that have
-                //continuous service = 0 or auto_renew = 0, this will be caught in the email sending.
-                //that way it will not be pulled again for invoicing since the
-                //renwal_invoices_created will be 1.
-                //we will then check before sending it if the order is still valid.
+                    //we will create an invoice for any valid renewal orders (including ones that have
+                    //continuous service = 0 or auto_renew = 0, this will be caught in the email sending.
+                    //that way it will not be pulled again for invoicing since the
+                    //renwal_invoices_created will be 1.
+                    //we will then check before sending it if the order is still valid.
 
-                command = new MySqlCommand(renewal_orders_query_string, myConn);
-                command.ExecuteNonQuery();
+                    command = new MySqlCommand(renewal_orders_query_string, myConn);
+                    command.ExecuteNonQuery();
 
-                MySqlDataReader myReader;
-                myReader = command.ExecuteReader();
+                    MySqlDataReader myReader;
+                    myReader = command.ExecuteReader();
 
-                while (myReader.Read())
-                {
-                    renewal_orders_id = Convert.ToInt32(myReader["orders_id"]);
-                    renewal_orders_customers_id = Convert.ToInt32(myReader["customers_id"]);
-                    products_status = Convert.ToInt32(myReader["products_status"]);
-                    skus_status = Convert.ToInt32(myReader["skus_status"]);
-                    continuous_service = Convert.ToInt32(myReader["continuous_service"]);
-                    products_id = Convert.ToInt32(myReader["products_id"]);
-                    skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
-                    prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
-                    auto_renew = Convert.ToInt32(myReader["auto_renew"]);
+                    while (myReader.Read())
+                    {
+                        renewal_orders_id = Convert.ToInt32(myReader["orders_id"]);
+                        renewal_orders_customers_id = Convert.ToInt32(myReader["customers_id"]);
+                        products_status = Convert.ToInt32(myReader["products_status"]);
+                        skus_status = Convert.ToInt32(myReader["skus_status"]);
+                        continuous_service = Convert.ToInt32(myReader["continuous_service"]);
+                        products_id = Convert.ToInt32(myReader["products_id"]);
+                        skus_type_order = Convert.ToInt32(myReader["skus_type_order"]);
+                        prior_orders_id = Convert.ToInt32(myReader["prior_orders_id"]);
+                        auto_renew = Convert.ToInt32(myReader["auto_renew"]);
 
-                    //Let's check to make sure the user hasn't already been entered for the same order
-                    //if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
-                    // it will allow us to continue. Which is what we want here.
-                    /*$create_renewal_invoice_query_string = "insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
-                          values (now(), '" . $renewal_orders_id . "', '" . $renewal_orders_customers_id . "', '" . $renewals_billing_series_id . "', '1', '1')";
+                        //Let's check to make sure the user hasn't already been entered for the same order
+                        //if so the unique index will be violated and an error returned. Using the tep_db_query_return_error version of the
+                        // it will allow us to continue. Which is what we want here.
+                        string create_renewal_invoice_query_string = @"insert into renewals_invoices (date_to_be_sent, orders_id, customers_id, renewals_billing_series_id, effort_number, in_progress)
+                            values (now(), '" + renewal_orders_id.ToString() + "', '" + renewal_orders_customers_id.ToString() + "', '" + renewals_billing_series_id.ToString() + "', '1', '1')";
+                        
+                        try
+                        {
 
-			$result = tep_db_query_return_error($create_renewal_invoice_query_string);
+                            command5 = new MySqlCommand(create_renewal_invoice_query_string, myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
 
-			//if there was an error let's record that.
-			if (tep_db_query_returned_error()) {
-				log_renewal_process("Warning: create_renewal_invoice tried to insert the same user,same order, same effort (" . $create_renewal_invoice_query_string . ")", $orders_id);
-			}
-			//if there was an error or not, we need to update the order so it won't get pulled again.
-			tep_db_query("update orders set renewal_invoices_created = 1 where orders_id = '" . $renewal_orders_id . "'");
-			$number_of_renewal_invoices_created++;
-                    */
+
+                        }
+                        catch (MySqlException ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                            if (ex.Message.Contains("Duplicate"))
+                            {
+                                mysqlError = true;
+                                //if there was an error let's record that.
+                                log_renewal_process("Warning: create_renewal_invoice tried to insert the same user,same order, same effort (" + create_renewal_invoice_query_string + ")", orders_id);
+                            }
+                            
+                        }
+                        //if there was an error or not, we need to update the order so it won't get pulled again.
+                        command5 = new MySqlCommand("update orders set renewal_invoices_created = 1 where orders_id = '" + renewal_orders_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+
+                        number_of_renewal_invoices_created++;
+                    }
+
+                    myReader.Close();
                 }
 
-                myReader.Close();
-                //}
                 return number_of_renewal_invoices_created;
             }
             catch (Exception e)
