@@ -1598,7 +1598,41 @@ namespace BlueDolphin.Renewal
                         command5.Dispose();
                         continue;
                     }
+                    if (renewals_invoices_email_name == string.Empty)
+                    {
+                        log_renewal_process("ERROR: Renewal email name is not set for billing series id: " + renewals_billing_series_id.ToString());
+                    }
+                    else
+                    {
+                        //first the include doesn't have a return stmt so it will set $found_include_file to 1 if
+                        //the inlude worked. The included file will set $accepted_for_delivery if the email was sent.
+                        string tplDir = get_template_dir(skinsites_id);
+                        bool found_include_file = File.Exists(tplDir + "/" + renewals_invoices_email_name);
+                        if (accepted_for_delivery)
+                        {
+                            number_of_email_renewal_invoices_sent++;
+                            //update the was_sent flag.
+                            command5 = new MySqlCommand(@"update renewals_invoices
+    						  set was_sent=1, date_sent=now()
+    						  where renewals_invoices_id='" + renewals_invoices_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+                            //update the order's invoices_sent flag. so it will be pulled for charging.
+                            command5 = new MySqlCommand(@"update orders set renewal_invoices_sent=1 where orders_id='" + orders_id.ToString() + "'", myConn);
+                            command5.ExecuteNonQuery();
+                            command5.Dispose();
+                        }
+                        else
+                        {
+                            //if the include wasn't found see why. If the mail wasn't sent we will try again tomorrow, since the
+                            //was_sent flag wasn't updated.
+                            if (!found_include_file)
+                            {
+                                log_renewal_process("ERROR: Unable to find renewal email: " + renewals_invoices_email_name);
+                            }
+                        }
 
+                    }
                 }
                 myReader.Close();
                 return number_of_email_renewal_invoices_sent;
