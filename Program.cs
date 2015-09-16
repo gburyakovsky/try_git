@@ -111,6 +111,9 @@ namespace BlueDolphin.Renewal
         public static string RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = "0";
         public static string DEFAULT_RENEWAL_CHARGE_DAYS = "0";
         public static string DEFAULT_RENEWAL_LEADTIME;
+        public static string DEFAULT_CURRENCY;
+        public static string LANGUAGE_CURRENCY;
+        public static string USE_DEFAULT_LANGUAGE_CURRENCY;
         public static string MODULE_PAYMENT_PAYFLOWPRO_USER = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_VENDOR = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PARTNER = string.Empty;
@@ -256,6 +259,7 @@ namespace BlueDolphin.Renewal
         private static DateTime fulfillment_batch_date;
         private static string order_fulfillment_batch_week;
         private static int order_fulfillment_status_id;
+        private static string currency;
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -1505,13 +1509,10 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-                /*     global $currency;
-
-	            $currency = (USE_DEFAULT_LANGUAGE_CURRENCY == "true") ? LANGUAGE_CURRENCY : DEFAULT_CURRENCY;
-	            $currencies = new currencies();  */
-
+	            currency = (USE_DEFAULT_LANGUAGE_CURRENCY == "true") ? LANGUAGE_CURRENCY : DEFAULT_CURRENCY;
+	            //$currencies = new currencies(); 
+                bool is_gift2;
                 //go through only pending orders, which haven"t been sent yet and are in progress
-
                 int number_of_email_renewal_invoices_sent = 0;
 
                 command = new MySqlCommand(string.Empty, myConn);
@@ -1538,6 +1539,7 @@ namespace BlueDolphin.Renewal
  												and rbs.renewals_invoices_type = 'EMAIL'";
                 command.ExecuteNonQuery();
                 string renewals_email_name = string.Empty;
+                string renewals_invoices_email_name = string.Empty;
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
 
@@ -1560,6 +1562,43 @@ namespace BlueDolphin.Renewal
                     is_gift = Convert.ToInt32(myReader["is_gift"].ToString());
                     skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
                     is_postcard_confirmation = Convert.ToInt32(myReader["is_postcard_confirmation"]);
+
+                    // check to see if order is a postcard confirmation. If it is, mark the invoice as sent and move to next order (no e-mail).
+                    if (is_postcard_confirmation == 1)
+                    {
+                        number_of_email_renewal_invoices_sent++;
+                        //update the was_sent flag.
+                        command5 = new MySqlCommand(@"update renewals_invoices
+						  set was_sent=1, date_sent=now()
+						  where renewals_invoices_id='" +renewals_invoices_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+
+                        //update the order's invoices_sent flag. so it will be pulled for charging.
+                        command5 = new MySqlCommand("update orders set renewal_invoices_sent=1 where orders_id='" + orders_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+                        continue;
+                    }
+
+                    if (is_gift == 1)
+                    {
+                        is_gift2 = true;
+                    }
+                    else
+                    {
+                        is_gift2 = false;
+                    }
+                    //check to see if the order is still valid for invoice sending
+                    check_renewal_order_result = check_renewal_order();
+                    if (check_renewal_order_result != "true") {
+                        comments = "This email effort was not sent because " + check_renewal_order_result;
+                        command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments = '" + comments + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+                        continue;
+                    }
+
                 }
                 myReader.Close();
                 return number_of_email_renewal_invoices_sent;
@@ -3098,6 +3137,9 @@ namespace BlueDolphin.Renewal
             try
             {
                 DEFAULT_ORDERS_STATUS_ID = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_ORDERS_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault();
+                LANGUAGE_CURRENCY = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "LANGUAGE_CURRENCY" select (string)dr["configuration_value"]).FirstOrDefault();
+                DEFAULT_CURRENCY = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_CURRENCY" select (string)dr["configuration_value"]).FirstOrDefault();
+                USE_DEFAULT_LANGUAGE_CURRENCY = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "USE_DEFAULT_LANGUAGE_CURRENCY" select (string)dr["configuration_value"]).FirstOrDefault();
                 RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "RENEWAL_POSTCARD_CONFIRMATION_DELAY_DAYS" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_USER = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_USER" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_VENDOR = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_VENDOR" select (string)dr["configuration_value"]).FirstOrDefault();
@@ -3162,6 +3204,20 @@ namespace BlueDolphin.Renewal
                 {
                     return string.Empty;
                 }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return string.Empty;
+            }
+        }
+
+        private static string get_template_dir(int SkinsitesId)
+        {
+            try
+            {
+                string _template_dir = (from DataRow dr in skinsites.Rows where Convert.ToInt32(dr["skinsites_id"]) == SkinsitesId select (string)dr["tplDir"]).FirstOrDefault();
+                return _template_dir;
             }
             catch (Exception e)
             {
