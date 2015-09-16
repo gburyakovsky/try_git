@@ -6,6 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
+using System.Net;
+using System.Net.Mail;
+using System.Net.Mime;
 using System.Data.Sql;
 using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
@@ -3252,6 +3255,20 @@ namespace BlueDolphin.Renewal
             {
                 string _template_dir = (from DataRow dr in skinsites.Rows where Convert.ToInt32(dr["skinsites_id"]) == SkinsitesId select (string)dr["tplDir"]).FirstOrDefault();
                 return _template_dir;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return string.Empty;
+            }
+        }
+
+        private static string tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool bcc = false)
+        {
+            try
+            {
+
+                return string.Empty;
             }
             catch (Exception e)
             {
