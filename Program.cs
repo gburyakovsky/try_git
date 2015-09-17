@@ -1826,7 +1826,12 @@ namespace BlueDolphin.Renewal
             //we also need to cancel any still Pending orders that have moved to history.
             try
             {
+                int orders_status_id;
+                int cancel_status_id;
+                int customer_notified;
+                DateTime last_effort_sent;
                 int number_of_mass_cancelled_orders = 0;
+                string cancel_delay;
                 renewal_active_invoices_info = new DataTable();
                 renewal_history_invoices_info = new DataTable();
                 renewal_invoices_info_array = new DataTable();
@@ -1876,9 +1881,19 @@ namespace BlueDolphin.Renewal
                 {
                     renewal_invoices_info_array.Merge(renewal_active_invoices_info);
                 }
-                if (renewal_history_invoices_info.Rows.cout > 0)
+                if (renewal_history_invoices_info.Rows.Count > 0)
                 {
                     renewal_invoices_info_array.Merge(renewal_history_invoices_info);
+                }
+                foreach (DataRow dr in renewal_invoices_info_array.Rows)
+                {
+                    orders_id = Convert.ToInt32(dr["orders_id"]);
+                    orders_status_id = Convert.ToInt32(dr["orders_status"]);
+                    cancel_status_id = Convert.ToInt32(DEFAULT_CANCEL_ORDER_STATUS_ID);
+                    customer_notified = 0;
+                    cancel_delay = dr["cancel_delay"].ToString()!=string.Empty ? dr["cancel_delay"].ToString() : string.Empty;
+                    renewals_invoices_id = Convert.ToInt32(dr["renewals_invoices_id"]);
+                    last_effort_sent = Convert.ToDateTime(dr["date_sent"]);
                 }
                 return number_of_mass_cancelled_orders;
             }
