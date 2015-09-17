@@ -116,6 +116,7 @@ namespace BlueDolphin.Renewal
         public static string DEFAULT_RENEWAL_LEADTIME;
         public static string DEFAULT_CURRENCY;
         public static string LANGUAGE_CURRENCY;
+        public static string DEFAULT_CANCEL_ORDER_STATUS_ID;
         public static string USE_DEFAULT_LANGUAGE_CURRENCY;
         public static string MODULE_PAYMENT_PAYFLOWPRO_USER = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_VENDOR = string.Empty;
@@ -292,6 +293,9 @@ namespace BlueDolphin.Renewal
         private static DataTable getFulfillmentBatchWeek = null;
         private static DataTable fulfillment_delay_batch_week_array;
         private static DataTable fulfillment_current_batch_week_array;
+        private static DataTable renewal_active_invoices_info;
+        private static DataTable renewal_history_invoices_info;
+        private static DataTable renewal_invoices_info_array;
         /// <summary>
         /// 
         /// </summary>
@@ -975,7 +979,7 @@ namespace BlueDolphin.Renewal
                     cc_expires = cc_expires_month + "" + cc_expires_year;
 
                     //check to see if the order is still valid for charging
-                    check_renewal_order_result = check_renewal_order();
+                    check_renewal_order_result = check_renewal_order(skus_type_order, skus_status, products_id, prior_orders_id, continuous_service, auto_renew, renewal_order_status);
                     if (check_renewal_order_result != "true")
                     {
                         //Since this isn't a valid renewal order anylonger, we don't charge, set the charge_date = null
@@ -1417,7 +1421,7 @@ namespace BlueDolphin.Renewal
 
                     //check to see if the order is still valid for invoice creation, if not then update the invoice
                     //and move on to next order.
-                    check_renewal_order_result = check_renewal_order();
+                    check_renewal_order_result = check_renewal_order(skus_type_order, skus_status, products_id, prior_orders_id, continuous_service, auto_renew, renewal_order_status);
                     if (check_renewal_order_result != "true")
                     {
                         comment = "Next effort for this invoice was not created because " + check_renewal_order_result;
@@ -1593,7 +1597,7 @@ namespace BlueDolphin.Renewal
                         is_gift2 = false;
                     }
                     //check to see if the order is still valid for invoice sending
-                    check_renewal_order_result = check_renewal_order();
+                    check_renewal_order_result = check_renewal_order(skus_type_order, skus_status, products_id, prior_orders_id, continuous_service, auto_renew, renewal_order_status);
                     if (check_renewal_order_result != "true") {
                         comments = "This email effort was not sent because " + check_renewal_order_result;
                         command5 = new MySqlCommand("update renewals_invoices set in_progress = 0, comments = '" + comments + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
@@ -1680,6 +1684,7 @@ namespace BlueDolphin.Renewal
                 command.ExecuteNonQuery();
                 MySqlDataReader myReader;
                 myReader = command.ExecuteReader();
+                // Loop through our paper invoices and write them to our database table.
                 while (myReader.Read())
                 {
                     // Pull data form our current renewal invoice.
@@ -1717,8 +1722,45 @@ namespace BlueDolphin.Renewal
                     cc_number_display = myReader["cc_number_display"].ToString();
                     template_directory = myReader["tplDir"].ToString();
                     skinsites_id = Convert.ToInt32(myReader["skinsites_id"]);
+
+                    // Check to make sure we can still process this paper invoice.
+                    // If not print why and stop processing renewal invoice.
+                    check_renewal_order_result = check_renewal_order(skus_type_order, skus_status, products_id, prior_orders_id, continuous_service, auto_renew, renewal_order_status);
+                    if (check_renewal_order_result != "true")
+                    {
+                        //set the in_progress to 0. Used for clean up later.
+                        comments = "This paper effort was not created because " + check_renewal_order_result;
+                        command5 = new MySqlCommand(@"update renewals_invoices set in_progress = 0, comments = '" + comments + "' where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
+                        command5.ExecuteNonQuery();
+                        command5.Dispose();
+                        continue;
+                    }
+                    // Insert a new row into our paper invoices file
+                    command5 = new MySqlCommand(@"insert into paper_invoices (customers_id, billing_first_name, billing_last_name, billing_address_line_1, billing_address_line_2, billing_city, billing_state,
+					billing_postal_code, delivery_first_name, delivery_last_name, delivery_address_line_1, delivery_address_line_2, delivery_city, delivery_state,
+					delivery_postal_code, product_name, price, term, effort_number, orders_id, date_purchased, amount_owed, amount_paid, email_address,
+					renewals_billing_series_code, cc_number_display, template_directory, site_id, created_date, modified_date, active)
+					values ('" + customers_id.ToString() + "', '" + billing_first_name.Replace("'", "\\'") + "', '" + billing_last_name.Replace("'", "\\'") + "', '" + billing_address_line_1.Replace("'", "\\'") + "', '', '" + billing_city.Replace("'", "\\'") + "', '" + billing_state + @"',
+					'" + billing_postal_code.Replace("'", "\\'") + "', '" + delivery_first_name.Replace("'", "\\'") + "', '" + delivery_last_name.Replace("'", "\\'") + "', '" + delivery_address_line_1.Replace("'", "\\'") + "', '', '" + delivery_city.Replace("'", "\\'") + "', '" + delivery_state.Replace("'", "\\'") + @"',
+					'" + delivery_postal_code.Replace("'", "\\'") + "', '" + products_name.Replace("'", "\\'") + "', '" + price.ToString() + "', '" + skus_term.ToString() + "', '" + effort_number.ToString() + "', '" + orders_id.ToString() + "', '" + date_purchased.ToString() + @"',
+					'" + amount_owed.ToString() + "', '" + amount_paid.ToString() + "', '" + email_address + "', '" + renewals_billing_series_code.Replace("'", "\\'") + "', '" + cc_number_display.Replace("'", "\\'") + "', '" + template_directory.Replace("'", "\\'") + "', '" + skinsites_id.ToString() + "', now(), now(), 1)", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                    // Increment our number of papaer invoices by one.
+                    number_of_renewal_paper_invoices_file_records++;
+                    // Update the was_sent flag.
+                    command5 = new MySqlCommand(@"update renewals_invoices
+					  set was_sent=1, date_sent=now()
+					  where renewals_invoices_id='" + renewals_invoices_id.ToString() + "'", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                    // Update the order's invoices_sent flag.
+                    command5 = new MySqlCommand(@"update orders set renewal_invoices_sent=1 where orders_id='" + orders_id.ToString() + "'", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
                 }
                 myReader.Close();
+                // Return the number of paper invoices processed.
                 return number_of_renewal_paper_invoices_file_records;
             }
             catch (Exception e)
@@ -1785,7 +1827,9 @@ namespace BlueDolphin.Renewal
             try
             {
                 int number_of_mass_cancelled_orders = 0;
-
+                renewal_active_invoices_info = new DataTable();
+                renewal_history_invoices_info = new DataTable();
+                renewal_invoices_info_array = new DataTable();
                 command = new MySqlCommand(string.Empty, myConn);
                 command.CommandText = @"select ri.*, o.*, rbs.*
 												from renewals_invoices ri,
@@ -1800,6 +1844,42 @@ namespace BlueDolphin.Renewal
 												and rbs.cancel_delay is not null
 												and to_days(now()) > to_days(DATE_ADD(ri.date_sent,INTERVAL rbs.cancel_delay DAY))";
                 command.ExecuteNonQuery();
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command))
+                {
+                    da.Fill(renewal_active_invoices_info);
+                }
+                command.Dispose();
+                //now find any invoices in history table for PENDING orders that have no active renewal invoices for
+                //the order's current renewals_billing_series.
+                //these renewal orders need to be cancelled.
+                command5 = new MySqlCommand(@"
+		                                    select
+			                                    rih.*, o.*
+		                                    from
+			                                    renewals_invoices_history rih,
+			                                    orders o left join renewals_invoices ri on (ri.orders_id = o.orders_id),
+			                                    renewals_billing_series rbs
+		                                    where
+			                                    ri.orders_id is null
+			                                    and rih.orders_id = o.orders_id
+			                                    and o.renewals_billing_series_id = rbs.renewals_billing_series_id
+			                                    and rbs.renewals_billing_series_id = rih.renewals_billing_series_id
+			                                    and o.orders_status = 1
+	                                    ", myConn);
+                command5.ExecuteNonQuery();
+                using (MySqlDataAdapter da = new MySqlDataAdapter(command5))
+                {
+                    da.Fill(renewal_history_invoices_info);
+                }
+                command5.Dispose();
+                if (renewal_active_invoices_info.Rows.Count > 0)
+                {
+                    renewal_invoices_info_array.Merge(renewal_active_invoices_info);
+                }
+                if (renewal_history_invoices_info.Rows.cout > 0)
+                {
+                    renewal_invoices_info_array.Merge(renewal_history_invoices_info);
+                }
                 return number_of_mass_cancelled_orders;
             }
             catch (Exception e)
@@ -1900,7 +1980,7 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static string check_renewal_order()
+        private static string check_renewal_order(int skus_type_order, int skus_status, int products_id, int prior_orders_id, int continuous_service, int auto_renew, int renewal_order_status)
         {
             //If a renewal order is placed, at the time of the sending of email or charging the card,
             //or getting check, the product and sku could be changed to
@@ -3188,6 +3268,7 @@ namespace BlueDolphin.Renewal
                 MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS" select (string)dr["configuration_value"]).FirstOrDefault());
                 MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES" select (string)dr["configuration_value"]).FirstOrDefault());
                 DEFAULT_RETRY_RENEWAL_CHARGE_DAYS = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_RETRY_RENEWAL_CHARGE_DAYS" select (string)dr["configuration_value"]).FirstOrDefault());
+                DEFAULT_CANCEL_ORDER_STATUS_ID = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_CANCEL_ORDER_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault();
                 MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID = Convert.ToInt32((from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_ORDER_STATUS_ID" select (string)dr["configuration_value"]).FirstOrDefault());
                 SEND_EMAILS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "SEND_EMAILS" select (string)dr["configuration_value"]).FirstOrDefault();
                 DEFAULT_RENEWAL_LEADTIME = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "DEFAULT_RENEWAL_LEADTIME" select (string)dr["configuration_value"]).FirstOrDefault(); ;
