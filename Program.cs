@@ -1826,12 +1826,12 @@ namespace BlueDolphin.Renewal
             //we also need to cancel any still Pending orders that have moved to history.
             try
             {
-                int orders_status_id;
-                int cancel_status_id;
-                int customer_notified;
-                DateTime last_effort_sent;
+                int orders_status_id = 0;
+                int cancel_status_id = 0;
+                int customer_notified = 0;
+                DateTime last_effort_sent = DateTime.Now;
                 int number_of_mass_cancelled_orders = 0;
-                string cancel_delay;
+                string cancel_delay = string.Empty;
                 renewal_active_invoices_info = new DataTable();
                 renewal_history_invoices_info = new DataTable();
                 renewal_invoices_info_array = new DataTable();
@@ -1891,9 +1891,34 @@ namespace BlueDolphin.Renewal
                     orders_status_id = Convert.ToInt32(dr["orders_status"]);
                     cancel_status_id = Convert.ToInt32(DEFAULT_CANCEL_ORDER_STATUS_ID);
                     customer_notified = 0;
-                    cancel_delay = dr["cancel_delay"].ToString()!=string.Empty ? dr["cancel_delay"].ToString() : string.Empty;
+                    cancel_delay = dr["cancel_delay"].ToString() != string.Empty ? dr["cancel_delay"].ToString() : string.Empty;
                     renewals_invoices_id = Convert.ToInt32(dr["renewals_invoices_id"]);
                     last_effort_sent = Convert.ToDateTime(dr["date_sent"]);
+
+                    //if cancel_delay isn't set, there aren't any active invoices left (it wasn't included in the  $renewal_history_invoices_info_query)
+                    if (cancel_delay == string.Empty)
+                    {
+                        comments = "Cancelled by Renewal Process. Last effort was sent on " + last_effort_sent.ToString() + ", no active invoices left and order is still pending.";
+                    }
+                    else
+                    {
+                        comments = "Cancelled by Renewal Process. Last effort was sent on " + last_effort_sent.ToString() + ", no payment has been made for " + cancel_delay.ToString() + " days, which is this billing series cancel delay.";
+                    }
+                    //update the order status
+                    command5 = new MySqlCommand("update orders set orders_status = '" + DEFAULT_CANCEL_ORDER_STATUS_ID + "' where orders_id = '" + orders_id.ToString() + "'", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                    //add to orders status history
+                    command5 = new MySqlCommand("insert into " + TABLE_ORDERS_STATUS_HISTORY + " (orders_id, orders_status_id, date_added, customer_notified, comments) values ('" + orders_id.ToString() + "', '" + cancel_status_id.ToString().Replace("'", "\\'") + "', now(), '" + customer_notified.ToString().Replace("'", "\\'") + "', '" + comments.Replace("'", "\\'") + "')", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                    //set the in_progress to 0 for clean up.
+                    command5 = new MySqlCommand("update renewals_invoices set in_progress=0 where renewals_invoices_id = '" + renewals_invoices_id.ToString() + "'", myConn);
+                    command5.ExecuteNonQuery();
+                    command5.Dispose();
+                    //create the batch for the cancel. need to enter the order's previous status, since if it is a pending order, then it will do an ignore fulfillment
+                    create_fulfillment_batch_item(Convert.ToInt32(orders_id.ToString().Replace("'", "\\'")), FULFILLMENT_CANCEL_ID, orders_status_id.ToString());
+                    number_of_mass_cancelled_orders++;
                 }
                 return number_of_mass_cancelled_orders;
             }
@@ -3363,7 +3388,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-
                 return string.Empty;
             }
             catch (Exception e)
