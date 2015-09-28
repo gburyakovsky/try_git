@@ -406,9 +406,9 @@ namespace BlueDolphin.Renewal
                 email_body += "End renewal main \n\n";
 
                 // Send e-mail saying we have completed the renewal run.
-                //tep_mail("M2 Media Group Jobs", "jobs@m2mediagroup.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
-                //tep_mail("Michael Borchetta", "mborchetta@m2mediagroup.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
-                //tep_mail("Martin Schmidt", "mschmidt@mcswebsolutions.com", "Renewal Process Successful", $email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
+                tep_mail("M2 Media Group Jobs", "jobs@m2mediagroup.com", "Renewal Process Successful", email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
+                tep_mail("Michael Borchetta", "mborchetta@m2mediagroup.com", "Renewal Process Successful", email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
+                tep_mail("Martin Schmidt", "mschmidt@mcswebsolutions.com", "Renewal Process Successful", email_body, "BlueDolphin", "jobs@m2mediagroup.com", "", "",false);
 
                 myConn.Close();
                 Console.ReadLine();
@@ -3388,6 +3388,13 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+                MailMessage mail = new MailMessage(from_email_address, to_email_address, email_subject, email_text);
+                SmtpClient client = new SmtpClient();
+                client.Port = 25;
+                client.DeliveryMethod = SmtpDeliveryMethod.Network;
+                client.UseDefaultCredentials = false;
+                client.Host = "smtp.google.com";
+                client.Send(mail);
                 return string.Empty;
             }
             catch (Exception e)
