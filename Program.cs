@@ -18,6 +18,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Remoting;
 using System.Globalization;
 using System.Web;
+using System.Security.Cryptography;
 using System.Web.UI.HtmlControls;
 using MySql.Data;
 using MySql.Data.MySqlClient;
@@ -296,6 +297,8 @@ namespace BlueDolphin.Renewal
         private static DataTable renewal_active_invoices_info;
         private static DataTable renewal_history_invoices_info;
         private static DataTable renewal_invoices_info_array;
+        private static readonly byte[] initVectorBytes = Encoding.ASCII.GetBytes("tu89geji340t89u2");
+        private const int keysize = 256;
         /// <summary>
         /// 
         /// </summary>
@@ -3158,16 +3161,9 @@ namespace BlueDolphin.Renewal
                 input2 = input2.Trim();
                 byte[] bites = System.Convert.FromBase64String(input2);
                 input2 = System.Text.Encoding.UTF8.GetString(bites);
-                /*    $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
-                 $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
-                 $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
-                 mcrypt_generic_init ($td, $key, $iv);
-                 $decrypted_data = mdecrypt_generic ($td, $input);
-                 mcrypt_generic_deinit ($td);
-                 mcrypt_module_close ($td);
-                 return trim(chop($decrypted_data)); */
 
-                return key;
+                string dec_cc = Decrypt(input2, key);
+                return dec_cc;
             }
             catch (Exception e)
             {
@@ -3187,17 +3183,8 @@ namespace BlueDolphin.Renewal
                 input2 = input2.Replace("\r", "");
                 input2 = input2.Trim();
 
-                /*      $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
-                        $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
-                        $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
-                        mcrypt_generic_init ($td, $key, $iv);
-                        $encrypted_data = mcrypt_generic ($td, $input);
-                        mcrypt_generic_deinit ($td);
-                        mcrypt_module_close ($td);
-                        return trim(chop(base64_encode($encrypted_data)));
-                 
-                 */
-                return key;
+                string enc_cc = Encrypt(input2, key);
+                return enc_cc;
             }
             catch (Exception e)
             {
@@ -3401,6 +3388,57 @@ namespace BlueDolphin.Renewal
             {
                 Console.WriteLine(e.Message);
                 return string.Empty;
+            }
+        }
+
+        public static string Encrypt(string plainText, string passPhrase)
+        {
+            byte[] plainTextBytes = Encoding.UTF8.GetBytes(plainText);
+            using (PasswordDeriveBytes password = new PasswordDeriveBytes(passPhrase, null))
+            {
+                byte[] keyBytes = password.GetBytes(keysize / 8);
+                using (RijndaelManaged symmetricKey = new RijndaelManaged())
+                {
+                    symmetricKey.Mode = CipherMode.CBC;
+                    using (ICryptoTransform encryptor = symmetricKey.CreateEncryptor(keyBytes, initVectorBytes))
+                    {
+                        using (MemoryStream memoryStream = new MemoryStream())
+                        {
+                            using (CryptoStream cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write))
+                            {
+                                cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
+                                cryptoStream.FlushFinalBlock();
+                                byte[] cipherTextBytes = memoryStream.ToArray();
+                                return Convert.ToBase64String(cipherTextBytes);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public static string Decrypt(string cipherText, string passPhrase)
+        {
+            byte[] cipherTextBytes = Convert.FromBase64String(cipherText);
+            using (PasswordDeriveBytes password = new PasswordDeriveBytes(passPhrase, null))
+            {
+                byte[] keyBytes = password.GetBytes(keysize / 8);
+                using (RijndaelManaged symmetricKey = new RijndaelManaged())
+                {
+                    symmetricKey.Mode = CipherMode.CBC;
+                    using (ICryptoTransform decryptor = symmetricKey.CreateDecryptor(keyBytes, initVectorBytes))
+                    {
+                        using (MemoryStream memoryStream = new MemoryStream(cipherTextBytes))
+                        {
+                            using (CryptoStream cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
+                            {
+                                byte[] plainTextBytes = new byte[cipherTextBytes.Length];
+                                int decryptedByteCount = cryptoStream.Read(plainTextBytes, 0, plainTextBytes.Length);
+                                return Encoding.UTF8.GetString(plainTextBytes, 0, decryptedByteCount);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
