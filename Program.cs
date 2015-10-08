@@ -1031,7 +1031,7 @@ namespace BlueDolphin.Renewal
                     transaction["TRXTYPE"] = MODULE_PAYMENT_PAYFLOWPRO_TRXTYPE.Trim();
                     transaction["TENDER"] = MODULE_PAYMENT_PAYFLOWPRO_TENDER.Trim();
                     transaction["AMT"] = final_price.ToString("#,##0.00");
-                    transaction["ACCT"] = decrypt_cc(Convert.ToInt32(cc_number), customers_id).Substring(0, 19);
+                    transaction["ACCT"] = decrypt_cc(cc_number, customers_id).Substring(0, 19);
                     transaction["EXPDATE"] = cc_expires;
                     transaction["FREIGHTAMT"] = "";
                     transaction["TAXAMT"] = "";
@@ -3101,16 +3101,27 @@ namespace BlueDolphin.Renewal
             {
                 // step 1, calculate MD5 hash from input
                 System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create();
-                byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(ky);
+                byte[] inputBytes = System.Text.Encoding.UTF8.GetBytes(ky);
                 byte[] hash = md5.ComputeHash(inputBytes);
-
                 // step 2, convert byte array to hex string
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < hash.Length; i++)
                 {
-                    sb.Append(hash[i].ToString("X2"));
+                    sb.Append(hash[i].ToString("x2"));
                 }
-                return sb.ToString();
+                System.Security.Cryptography.MD5 md6 = System.Security.Cryptography.MD5.Create();
+                byte[] inputBytes2 = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+                byte[] hash2 = md6.ComputeHash(inputBytes2);
+                StringBuilder sb2 = new StringBuilder();
+                for (int i = 0; i < hash2.Length; i++)
+                {
+                    sb2.Append(hash2[i].ToString("x2"));
+                }
+                md5.Clear();
+                md5.Dispose();
+                md6.Clear();
+                md6.Dispose();
+                return sb2.ToString();
             }
             catch (Exception e)
             {
@@ -3118,27 +3129,32 @@ namespace BlueDolphin.Renewal
                 return e.Message;
             }
         }
+
         private static string get_pfp_pwd()
         {
             try
             {
-                string key = get_key();
-                string input = MODULE_PAYMENT_PAYFLOWPRO_PWD;
-                input = input.Replace("\n", "");
-                input = input.Replace("\t", "");
-                input = input.Replace("\r", "");
-                input = input.Trim();
-                byte[] bites = System.Convert.FromBase64String(input);
-                input = System.Text.Encoding.UTF8.GetString(bites);
-	           /*    $td = mcrypt_module_open ('tripledes', '', 'ecb', '');
-	            $key = substr(md5($key),0,mcrypt_enc_get_key_size ($td));
-	            $iv = mcrypt_create_iv (mcrypt_enc_get_iv_size ($td), MCRYPT_RAND);
-	            mcrypt_generic_init ($td, $key, $iv);
-	            $decrypted_data = mdecrypt_generic ($td, $input);
-	            mcrypt_generic_deinit ($td);
-	            mcrypt_module_close ($td);
-	            return trim(chop($decrypted_data)); */
-                return key;
+                string key = string.Empty;
+                string cipherString = MODULE_PAYMENT_PAYFLOWPRO_PWD;
+                cipherString = cipherString.Replace("\n", "");
+                cipherString = cipherString.Replace("\t", "");
+                cipherString = cipherString.Replace("\r", "");
+                cipherString = cipherString.Trim();
+                byte[] keyArray;
+                byte[] toEncryptArray = Convert.FromBase64String(cipherString);
+                key = get_key(Key);
+                TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
+                key = key.Substring(0, tdes.Key.Length);
+                keyArray = System.Text.Encoding.UTF8.GetBytes(key);
+                tdes.Key = keyArray;
+                tdes.GenerateIV();
+                tdes.Mode = CipherMode.ECB;
+                tdes.Padding = PaddingMode.None;
+                ICryptoTransform cTransform = tdes.CreateDecryptor();
+                byte[] resultArray = cTransform.TransformFinalBlock(
+                                     toEncryptArray, 0, toEncryptArray.Length);
+                tdes.Clear();
+                return System.Text.Encoding.UTF8.GetString(resultArray);
             }
             catch (Exception e)
             {
@@ -3149,30 +3165,39 @@ namespace BlueDolphin.Renewal
 
         //$input - stuff to decrypt
         //$key - the secret key to use
-        private static string decrypt_cc(int input, int customer_id)
+        public static string decrypt_cc(string cipherString, int customer_id)
         {
             try
             {
-                string key = get_key();
-                string input2 = input.ToString();
-                input2 = input2.Replace("\n", "");
-                input2 = input2.Replace("\t", "");
-                input2 = input2.Replace("\r", "");
-                input2 = input2.Trim();
-                byte[] bites = System.Convert.FromBase64String(input2);
-                input2 = System.Text.Encoding.UTF8.GetString(bites);
-
-                string dec_cc = Decrypt(input2, key);
-                return dec_cc;
+                string key = string.Empty;
+                cipherString = cipherString.Replace("\n", "");
+                cipherString = cipherString.Replace("\t", "");
+                cipherString = cipherString.Replace("\r", "");
+                cipherString = cipherString.Trim();
+                byte[] keyArray;
+                byte[] toEncryptArray = Convert.FromBase64String(cipherString);
+                key = get_key(Key);
+                TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
+                key = key.Substring(0, tdes.Key.Length);
+                keyArray = System.Text.Encoding.UTF8.GetBytes(key);
+                tdes.Key = keyArray;
+                tdes.GenerateIV();
+                tdes.Mode = CipherMode.ECB;
+                tdes.Padding = PaddingMode.None;
+                ICryptoTransform cTransform = tdes.CreateDecryptor();
+                byte[] resultArray = cTransform.TransformFinalBlock(
+                                     toEncryptArray, 0, toEncryptArray.Length);
+                tdes.Clear();
+                return System.Text.Encoding.UTF8.GetString(resultArray);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                Console.WriteLine(e.Message);
-                return e.Message;
+                Console.WriteLine(ex.Message);
+                return ex.Message;
             }
         }
 
-        private static string encrypt_cc(int input, int customer_id)
+        private static string encrypt_cc(string input, int customer_id)
         {
             try
             {
@@ -3183,7 +3208,7 @@ namespace BlueDolphin.Renewal
                 input2 = input2.Replace("\r", "");
                 input2 = input2.Trim();
 
-                string enc_cc = Encrypt(input2, key);
+                string enc_cc = string.Empty;//Encrypt(input2, key);
                 return enc_cc;
             }
             catch (Exception e)
@@ -3371,7 +3396,8 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static string tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool bcc = false)
+        private static string tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool b
+            = false)
         {
             try
             {
@@ -3390,56 +3416,6 @@ namespace BlueDolphin.Renewal
                 return string.Empty;
             }
         }
-
-        public static string Encrypt(string plainText, string passPhrase)
-        {
-            byte[] plainTextBytes = Encoding.UTF8.GetBytes(plainText);
-            using (PasswordDeriveBytes password = new PasswordDeriveBytes(passPhrase, null))
-            {
-                byte[] keyBytes = password.GetBytes(keysize / 8);
-                using (RijndaelManaged symmetricKey = new RijndaelManaged())
-                {
-                    symmetricKey.Mode = CipherMode.CBC;
-                    using (ICryptoTransform encryptor = symmetricKey.CreateEncryptor(keyBytes, initVectorBytes))
-                    {
-                        using (MemoryStream memoryStream = new MemoryStream())
-                        {
-                            using (CryptoStream cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write))
-                            {
-                                cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
-                                cryptoStream.FlushFinalBlock();
-                                byte[] cipherTextBytes = memoryStream.ToArray();
-                                return Convert.ToBase64String(cipherTextBytes);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        public static string Decrypt(string cipherText, string passPhrase)
-        {
-            byte[] cipherTextBytes = Convert.FromBase64String(cipherText);
-            using (PasswordDeriveBytes password = new PasswordDeriveBytes(passPhrase, null))
-            {
-                byte[] keyBytes = password.GetBytes(keysize / 8);
-                using (RijndaelManaged symmetricKey = new RijndaelManaged())
-                {
-                    symmetricKey.Mode = CipherMode.CBC;
-                    using (ICryptoTransform decryptor = symmetricKey.CreateDecryptor(keyBytes, initVectorBytes))
-                    {
-                        using (MemoryStream memoryStream = new MemoryStream(cipherTextBytes))
-                        {
-                            using (CryptoStream cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
-                            {
-                                byte[] plainTextBytes = new byte[cipherTextBytes.Length];
-                                int decryptedByteCount = cryptoStream.Read(plainTextBytes, 0, plainTextBytes.Length);
-                                return Encoding.UTF8.GetString(plainTextBytes, 0, decryptedByteCount);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+ 
     }
 }
