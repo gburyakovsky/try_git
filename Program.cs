@@ -3258,6 +3258,7 @@ namespace BlueDolphin.Renewal
             try
             {
                 string TransactionCommand = string.Empty;
+                string TransactionCommandParameters = string.Empty;
                 resp = new Dictionary<string, object>();
                 hostAddress = pfpro_defaulthost;
                 port = pfpro_defaultport;
@@ -3268,14 +3269,14 @@ namespace BlueDolphin.Renewal
                 proxy_password = pfpro_proxypassword;
  
 		        TransactionCommand = PFPRO_EXE_PATH + " ";
-		        TransactionCommand += url + " ";
-		        TransactionCommand += port + " "";
-		        TransactionCommand += parmsString + "" ";
-		        TransactionCommand += timeout + " ";
-		        TransactionCommand += proxy_url + " ";
-		        TransactionCommand += proxy_port + " ";
-	            TransactionCommand += proxy_logon + " ";
-		        TransactionCommand += proxy_password;
+		        TransactionCommandParameters = url + " ";
+		        TransactionCommandParameters += port + " "";
+		        TransactionCommandParameters += parmsString + "" ";
+		        TransactionCommandParameters += timeout + " ";
+		        TransactionCommandParameters += proxy_url + " ";
+		        TransactionCommandParameters += proxy_port + " ";
+	            TransactionCommandParameters += proxy_logon + " ";
+		        TransactionCommandParameters += proxy_password;
 
                 Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", LD_LIBRARY_PATH_ENV, EnvironmentVariableTarget.Machine);
 
@@ -3284,6 +3285,7 @@ namespace BlueDolphin.Renewal
 
                 System.Diagnostics.Process Process = new System.Diagnostics.Process();
                 Process.StartInfo.FileName = TransactionCommand;
+                Process.StartInfo.Arguments = TransactionCommandParameters;
 
                 return resp;
             }
@@ -3345,7 +3347,7 @@ namespace BlueDolphin.Renewal
                 pfpro_proxyport = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_PORT" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_proxylogin = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_LOGON" select (string)dr["configuration_value"]).FirstOrDefault();
                 pfpro_proxypassword = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PROXY_PASSWORD" select (string)dr["configuration_value"]).FirstOrDefault();
-                PFPRO_EXE_PATH = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_EXE_PATH_D" select (string)dr["configuration_value"]).FirstOrDefault();
+                PFPRO_EXE_PATH = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_EXE_PATH" select (string)dr["configuration_value"]).FirstOrDefault();
                 LD_LIBRARY_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_LD_LIBRARY_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
                 PFPRO_CERT_PATH_ENV = "PFPRO_CERT_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
             }
