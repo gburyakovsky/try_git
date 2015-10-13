@@ -3257,6 +3257,7 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+                string TransactionCommand = string.Empty;
                 resp = new Dictionary<string, object>();
                 hostAddress = pfpro_defaulthost;
                 port = pfpro_defaultport;
@@ -3265,11 +3266,24 @@ namespace BlueDolphin.Renewal
                 proxy_port = pfpro_proxyport;
                 proxy_logon = pfpro_proxylogin;
                 proxy_password = pfpro_proxypassword;
+ 
+		        TransactionCommand = PFPRO_EXE_PATH + " ";
+		        TransactionCommand += url + " ";
+		        TransactionCommand += port + " "";
+		        TransactionCommand += parmsString + "" ";
+		        TransactionCommand += timeout + " ";
+		        TransactionCommand += proxy_url + " ";
+		        TransactionCommand += proxy_port + " ";
+	            TransactionCommand += proxy_logon + " ";
+		        TransactionCommand += proxy_password;
 
                 Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", LD_LIBRARY_PATH_ENV, EnvironmentVariableTarget.Machine);
 
                 if (transaction.Count == 0)
                     return null;
+
+                System.Diagnostics.Process Process = new System.Diagnostics.Process();
+                Process.StartInfo.FileName = TransactionCommand;
 
                 return resp;
             }
