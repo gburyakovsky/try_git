@@ -126,6 +126,8 @@ namespace BlueDolphin.Renewal
         public static string MODULE_PAYMENT_PAYFLOWPRO_TENDER = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PWD = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV = string.Empty;
+        public static string BCC_EMAIL_ADDRESS = string.Empty;
+        public static string EMAIL_USE_HTML = string.Empty;
         public static string MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS = string.Empty;
         public static int MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS;
         public static int MAX_RENEWAL_CREDIT_CARD_CHARGE_EXPIRATION_FAILURES;
@@ -1073,6 +1075,7 @@ namespace BlueDolphin.Renewal
                     debug(transaction, "tansaction");
                     Environment.SetEnvironmentVariable("PFPRO_CERT_PATH", MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV, EnvironmentVariableTarget.Machine);
                     response = new Dictionary<string, object>();
+                    //string response = string.Empty;
                     response = pfpro_process(transaction, MODULE_PAYMENT_PAYFLOWPRO_HOSTADDRESS);
                     if (Debug == true)
                     {
@@ -3259,6 +3262,7 @@ namespace BlueDolphin.Renewal
             {
                 string TransactionCommand = string.Empty;
                 string TransactionCommandParameters = string.Empty;
+                string parmsString = string.Empty;
                 resp = new Dictionary<string, object>();
                 hostAddress = pfpro_defaulthost;
                 port = pfpro_defaultport;
@@ -3267,16 +3271,80 @@ namespace BlueDolphin.Renewal
                 proxy_port = pfpro_proxyport;
                 proxy_logon = pfpro_proxylogin;
                 proxy_password = pfpro_proxypassword;
+
+                foreach (KeyValuePair<string, object> transactionData in trans)
+                {
+                    parmsString += transactionData.Key + "[" + transactionData.Value.ToString().Length.ToString() + "]" + "=" + transactionData.Value.ToString() + "&";
+                }
+
+                parmsString = parmsString.Substring(0, parmsString.Length - 1);
  
 		        TransactionCommand = PFPRO_EXE_PATH + " ";
-		        TransactionCommandParameters = url + " ";
-		        TransactionCommandParameters += port + " "";
-		        TransactionCommandParameters += parmsString + "" ";
+		        TransactionCommandParameters = proxy_url + " ";
+		        TransactionCommandParameters += port + " '";
+		        TransactionCommandParameters += parmsString + "' ";
 		        TransactionCommandParameters += timeout + " ";
 		        TransactionCommandParameters += proxy_url + " ";
 		        TransactionCommandParameters += proxy_port + " ";
 	            TransactionCommandParameters += proxy_logon + " ";
 		        TransactionCommandParameters += proxy_password;
+
+                Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", LD_LIBRARY_PATH_ENV, EnvironmentVariableTarget.Machine);
+
+                if (transaction.Count == 0)
+                    return null;
+
+                System.Diagnostics.Process Process = new System.Diagnostics.Process();
+                Process.StartInfo.FileName = TransactionCommand;
+                Process.StartInfo.Arguments = TransactionCommandParameters;
+                Process.Start();
+
+                string output = Process.StandardOutput.ReadToEnd();
+                if(output == null)
+                {
+                    return null;
+                }
+                Console.WriteLine(output);
+                string err = Process.StandardError.ReadToEnd();
+                Console.WriteLine(err);
+                Process.WaitForExit();
+
+                return resp;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
+        } 
+
+       /* private static string pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
+                              string proxy_url = "", string proxy_port = "", string proxy_logon = "",
+                              string proxy_password = "")
+        {
+            try
+            {
+                string TransactionCommand = string.Empty;
+                string TransactionCommandParameters = string.Empty;
+                string parmsString = string.Empty;
+                string resp = string.Empty;
+                hostAddress = pfpro_defaulthost;
+                port = pfpro_defaultport;
+                timeout = pfpro_defaulttimeout;
+                proxy_url = pfpro_proxyaddress;
+                proxy_port = pfpro_proxyport;
+                proxy_logon = pfpro_proxylogin;
+                proxy_password = pfpro_proxypassword;
+
+                TransactionCommand = PFPRO_EXE_PATH + " ";
+                TransactionCommandParameters = proxy_url + " ";
+                TransactionCommandParameters += port + " ";
+                TransactionCommandParameters += parmsString + " ";
+                TransactionCommandParameters += timeout + " ";
+                TransactionCommandParameters += proxy_url + " ";
+                TransactionCommandParameters += proxy_port + " ";
+                TransactionCommandParameters += proxy_logon + " ";
+                TransactionCommandParameters += proxy_password;
 
                 Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", LD_LIBRARY_PATH_ENV, EnvironmentVariableTarget.Machine);
 
@@ -3294,8 +3362,7 @@ namespace BlueDolphin.Renewal
                 Console.WriteLine(e.Message);
                 return null;
             }
-        }
-
+        } */
         private static DataTable get_configuration_values()
         {
             try
@@ -3350,6 +3417,9 @@ namespace BlueDolphin.Renewal
                 PFPRO_EXE_PATH = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_EXE_PATH" select (string)dr["configuration_value"]).FirstOrDefault();
                 LD_LIBRARY_PATH_ENV = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_LD_LIBRARY_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
                 PFPRO_CERT_PATH_ENV = "PFPRO_CERT_PATH=" + (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "MODULE_PAYMENT_PAYFLOWPRO_PFPRO_CERT_PATH_ENV" select (string)dr["configuration_value"]).FirstOrDefault();
+                BCC_EMAIL_ADDRESS = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "BCC_EMAIL_ADDRESS" select (string)dr["configuration_value"]).FirstOrDefault();
+                EMAIL_USE_HTML = (from DataRow dr in config_dt.Rows where (string)dr["configuration_key"] == "EMAIL_USE_HTML" select (string)dr["configuration_value"]).FirstOrDefault();
+
             }
             catch (Exception e)
             {
@@ -3412,11 +3482,36 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static string tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool b
+        private static string tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool bcc
             = false)
         {
             try
             {
+
+                if (bcc == true)
+                {
+
+                   string bcc_email_address = BCC_EMAIL_ADDRESS;
+
+                    //send mail
+                }
+                else
+                {
+
+                   //send mail
+
+                }
+
+                if (EMAIL_USE_HTML == "true")
+                {
+
+
+                }
+                else
+                {
+
+
+                }
                 MailMessage mail = new MailMessage(from_email_address, to_email_address, email_subject, email_text);
                 SmtpClient client = new SmtpClient();
                 client.Port = 25;
