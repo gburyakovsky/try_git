@@ -1133,7 +1133,10 @@ namespace BlueDolphin.Renewal
                         the_code = response["RESULT"].ToString();
                         the_code = the_code.Substring(0, 3);
 
-                        if (the_code == "501" || the_code == "302" || the_code == "301" || the_code == "328" || the_code == "327" || the_code == "311" || the_code == "326" || the_code == "355" || the_code == "610" || the_code == "612" || the_code == "611" || the_code == "714" || the_code == "716" || the_code == "321" || the_code == "330" || the_code == "324" || the_code == "310" || the_code == "322" || the_code == "304" || the_code == "323" || the_code == "303" || the_code == "307" || the_code == "325" || the_code == "140" || the_code == "713")
+                        if (the_code == "501" || the_code == "302" || the_code == "301" || the_code == "328" || the_code == "327" || the_code == "311" || the_code == "326" 
+                            || the_code == "355" || the_code == "610" || the_code == "612" || the_code == "611" || the_code == "714" || the_code == "716" || the_code == "321" 
+                            || the_code == "330" || the_code == "324" || the_code == "310" || the_code == "322" || the_code == "304" || the_code == "323" || the_code == "303" 
+                            || the_code == "307" || the_code == "325" || the_code == "140" || the_code == "713")
                         {
                             renewals_credit_card_charge_attempts = MAX_RENEWAL_CREDIT_CARD_CHARGE_ATTEMPTS;
                         }
@@ -3281,8 +3284,8 @@ namespace BlueDolphin.Renewal
  
 		        TransactionCommand = PFPRO_EXE_PATH + " ";
 		        TransactionCommandParameters = proxy_url + " ";
-		        TransactionCommandParameters += port + " '";
-		        TransactionCommandParameters += parmsString + "' ";
+		        TransactionCommandParameters += port + " \"";
+		        TransactionCommandParameters += parmsString + "\" ";
 		        TransactionCommandParameters += timeout + " ";
 		        TransactionCommandParameters += proxy_url + " ";
 		        TransactionCommandParameters += proxy_port + " ";
@@ -3318,51 +3321,6 @@ namespace BlueDolphin.Renewal
             }
         } 
 
-       /* private static string pfpro_process(Dictionary<string, object> trans, string hostAddress, string port = "", string timeout = "",
-                              string proxy_url = "", string proxy_port = "", string proxy_logon = "",
-                              string proxy_password = "")
-        {
-            try
-            {
-                string TransactionCommand = string.Empty;
-                string TransactionCommandParameters = string.Empty;
-                string parmsString = string.Empty;
-                string resp = string.Empty;
-                hostAddress = pfpro_defaulthost;
-                port = pfpro_defaultport;
-                timeout = pfpro_defaulttimeout;
-                proxy_url = pfpro_proxyaddress;
-                proxy_port = pfpro_proxyport;
-                proxy_logon = pfpro_proxylogin;
-                proxy_password = pfpro_proxypassword;
-
-                TransactionCommand = PFPRO_EXE_PATH + " ";
-                TransactionCommandParameters = proxy_url + " ";
-                TransactionCommandParameters += port + " ";
-                TransactionCommandParameters += parmsString + " ";
-                TransactionCommandParameters += timeout + " ";
-                TransactionCommandParameters += proxy_url + " ";
-                TransactionCommandParameters += proxy_port + " ";
-                TransactionCommandParameters += proxy_logon + " ";
-                TransactionCommandParameters += proxy_password;
-
-                Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", LD_LIBRARY_PATH_ENV, EnvironmentVariableTarget.Machine);
-
-                if (transaction.Count == 0)
-                    return null;
-
-                System.Diagnostics.Process Process = new System.Diagnostics.Process();
-                Process.StartInfo.FileName = TransactionCommand;
-                Process.StartInfo.Arguments = TransactionCommandParameters;
-
-                return resp;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                return null;
-            }
-        } */
         private static DataTable get_configuration_values()
         {
             try
