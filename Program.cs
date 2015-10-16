@@ -3301,25 +3301,27 @@ namespace BlueDolphin.Renewal
                 Process.StartInfo.FileName = TransactionCommand;
                 Process.StartInfo.Arguments = TransactionCommandParameters;
                 Process.Start();
-
-                string output = Process.StandardOutput.ReadToEnd();
-                if(output == null)
-                {
-                    return null;
-                }
-                Console.WriteLine(output);
-                var items = output.Split(new[] { "&" }, StringSplitOptions.RemoveEmptyEntries)
-                   .Select(a => a.Split(new[] { '=' }));
-                output = output.Replace(" & ", "ascii");
-                foreach (var item in items)
-                {
-                    resp.Add(item[0].Replace("ascii", " & "), item[1]);
-                }
                 string err = Process.StandardError.ReadToEnd();
                 Console.WriteLine(err);
                 Process.WaitForExit();
 
-                return resp;
+                string output = Process.StandardOutput.ReadToEnd();
+                if (output == null)
+                {
+                    return null;
+                }
+                else
+                {
+                    Console.WriteLine(output);
+                    var items = output.Split(new[] { "&" }, StringSplitOptions.RemoveEmptyEntries)
+                       .Select(a => a.Split(new[] { '=' }));
+                    output = output.Replace(" & ", "ascii");
+                    foreach (var item in items)
+                    {
+                        resp.Add(item[0].Replace("ascii", " & "), item[1]);
+                    }
+                    return resp;
+                }
             }
             catch (Exception e)
             {
