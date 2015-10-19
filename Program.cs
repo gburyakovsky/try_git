@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Net.Mime;
 using System.Data.Sql;
+using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -267,6 +268,9 @@ namespace BlueDolphin.Renewal
         private static string order_fulfillment_batch_week;
         private static int order_fulfillment_status_id;
         private static string currency;
+        private static string sSource;
+        private static string sLog;
+        private static string sEvent;
         private static List<string> all_countries_array = new List<string>();
         private static Dictionary<string, object> orders_array;
         private static Dictionary<string, object> countries;
@@ -322,6 +326,13 @@ namespace BlueDolphin.Renewal
         {
             try
             {
+                
+                sSource = "Blue Dolphin Renewal Application";
+                sLog = "Application";
+                sEvent = "Sample Event";
+                if (!EventLog.SourceExists(sSource))
+                    EventLog.CreateEventSource(sSource, sLog);
+
                 // Set our email body string for our e-mail to an empty string.
                 string email_body = string.Empty;
                 //this allows the script to run without any maximum executiont time.
@@ -421,6 +432,9 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
+                //EventLog.WriteEntry(sSource, sEvent,
+                    //EventLogEntryType.Warning, 234);
             }
         }
 
@@ -801,6 +815,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1254,6 +1269,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1365,6 +1381,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1517,6 +1534,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1656,6 +1674,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1775,6 +1794,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1823,6 +1843,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -1934,6 +1955,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -2025,6 +2047,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return string.Empty;
             }
         }
@@ -2113,6 +2136,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return string.Empty;
             }
         }
@@ -2318,6 +2342,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -2455,6 +2480,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
             }
         }
 
@@ -2471,6 +2497,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
             }
         }
 
@@ -2487,6 +2514,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
             }
         }
 
@@ -2729,6 +2757,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
             }
         }
 
@@ -2757,6 +2786,7 @@ namespace BlueDolphin.Renewal
                 catch (MySqlException ex)
                 {
                     Console.WriteLine(ex.Message);
+                    EventLog.WriteEntry(sSource, ex.Message);
                     if (ex.Message.Contains("Duplicate"))
                     {
                         mySqlError = true;
@@ -2790,6 +2820,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -2811,6 +2842,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return false;
             }
         }
@@ -2842,6 +2874,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
             }
         }
 
@@ -2941,6 +2974,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -2972,6 +3006,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -3002,6 +3037,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return null;
             }
         }
@@ -3052,6 +3088,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return 0;
             }
         }
@@ -3073,6 +3110,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return false;
             }
         }
@@ -3097,6 +3135,7 @@ namespace BlueDolphin.Renewal
             catch(Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -3132,6 +3171,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -3165,6 +3205,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -3199,6 +3240,7 @@ namespace BlueDolphin.Renewal
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
+                EventLog.WriteEntry(sSource, ex.Message);
                 return ex.Message;
             }
         }
@@ -3220,6 +3262,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -3253,6 +3296,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return e.Message;
             }
         }
@@ -3326,6 +3370,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return null;
             }
         } 
@@ -3347,6 +3392,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return null;
             }
         }
@@ -3391,6 +3437,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
             }
         }
 
@@ -3431,6 +3478,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return string.Empty;
             }
         }
@@ -3445,6 +3493,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return string.Empty;
             }
         }
@@ -3491,6 +3540,7 @@ namespace BlueDolphin.Renewal
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                EventLog.WriteEntry(sSource, e.Message);
                 return string.Empty;
             }
         }
