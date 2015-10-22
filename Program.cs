@@ -23,6 +23,10 @@ using System.Security.Cryptography;
 using System.Web.UI.HtmlControls;
 using MySql.Data;
 using MySql.Data.MySqlClient;
+using System.Web.Razor;
+using RazorEngine;
+using BlueDolphin.Renewal.Model;
+using System.Web.Razor.Parser;
 
 namespace BlueDolphin.Renewal
 {
@@ -303,7 +307,6 @@ namespace BlueDolphin.Renewal
         private static DataTable renewal_active_invoices_info;
         private static DataTable renewal_history_invoices_info;
         private static DataTable renewal_invoices_info_array;
-        private static readonly byte[] initVectorBytes = Encoding.ASCII.GetBytes("tu89geji340t89u2");
         private const int keysize = 256;
         /// <summary>
         /// 
@@ -326,7 +329,6 @@ namespace BlueDolphin.Renewal
         {
             try
             {
-                
                 sSource = "Blue Dolphin Renewal Application";
                 sLog = "Application";
                 sEvent = "Sample Event";
@@ -3498,12 +3500,12 @@ namespace BlueDolphin.Renewal
             }
         }
 
-        private static string tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool bcc
+        private static void tep_mail(string to_name, string to_email_address, string email_subject, string email_text, string from_email_name, string from_email_address, string file_location = "", string file_name = "", bool bcc
             = false)
         {
             try
             {
-
+                //var emailHtmlBody = templateService.Parse(welcomeEmailTemplate, model, null, "WelcomeEmail");
                 if (bcc == true)
                 {
 
@@ -3528,22 +3530,26 @@ namespace BlueDolphin.Renewal
 
 
                 }
-                MailMessage mail = new MailMessage(from_email_address, to_email_address, email_subject, email_text);
+                MailMessage mail = new MailMessage(from_email_address, to_email_address, email_subject, email_text) 
+                {
+                    //Body = emailHtmlBody,
+                    IsBodyHtml = true,
+                    Subject = "Welcome"
+                };
                 SmtpClient client = new SmtpClient();
                 client.Port = 25;
                 client.DeliveryMethod = SmtpDeliveryMethod.Network;
                 client.UseDefaultCredentials = false;
                 client.Host = "smtp.google.com";
                 client.Send(mail);
-                return string.Empty;
+                //return string.Empty;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 EventLog.WriteEntry(sSource, e.Message);
-                return string.Empty;
+                //return string.Empty;
             }
         }
- 
     }
 }
