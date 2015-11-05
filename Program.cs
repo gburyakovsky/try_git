@@ -3530,19 +3530,23 @@ namespace BlueDolphin.Renewal
 
 
                 }
-                MailMessage mail = new MailMessage(from_email_address, to_email_address, email_subject, email_text) 
+                // Send the process report.
+                RazorEngine.Templating.TemplateService razor = new RazorEngine.Templating.TemplateService();
+                MailMessage message = new MailMessage();
+                SmtpClient server = new SmtpClient(ConfigurationManager.AppSettings["emailServer"]);
+
+                message.From = new MailAddress("jobs@m2mediagroup.com");
+                message.To.Add(ConfigurationManager.AppSettings["reportEmailRecipients"]);
+                message.Subject = string.Format("Razor Email Test");
+                message.IsBodyHtml = true;
+
+                Model.UserDetail model = new Model.UserDetail()
                 {
-                    //Body = emailHtmlBody,
-                    IsBodyHtml = true,
-                    Subject = "Welcome"
+                    Name = "Gene Buryakovsky",
+                    Address = ""
                 };
-                SmtpClient client = new SmtpClient();
-                client.Port = 25;
-                client.DeliveryMethod = SmtpDeliveryMethod.Network;
-                client.UseDefaultCredentials = false;
-                client.Host = "smtp.google.com";
-                client.Send(mail);
-                //return string.Empty;
+
+                message.Body = razor.Parse(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Template", "RenewalEmailTemplate.cshtml")), model, null, null);
             }
             catch (Exception e)
             {
